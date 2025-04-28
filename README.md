@@ -7,7 +7,7 @@
 </p>
 
 <p>
-  A solução foi desenvolvida utilizando o protocolo <b><i>Machine-to-Machine<i> (M2M)</b> e comunicação via <b>MQTT (<i>Message Queue Telemetry Transport<i>)</b>, através do uso de <b>API <i>Rest<i><b> e testado com o <b><i>Portainer<i><b>.
+  A solução foi desenvolvida utilizando o protocolo <b><i>Machine-to-Machine<i> (M2M)</b> e comunicação via <b>MQTT (<i>Message Queue Telemetry Transport<i>)</b>, através do uso de <b>API <i>Rest<i></b> e testado com o <b><i>Portainer<i></b>.
 </p>
 
 <p>
