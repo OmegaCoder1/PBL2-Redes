@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Lista de portas disponíveis
-PORTAS_MQTT = [1885]
+PORTAS_MQTT = [1883, 1884, 1885]
 
 # Variável global para armazenar a resposta
 resposta_recebida = None
