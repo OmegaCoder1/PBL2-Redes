@@ -456,13 +456,24 @@
                     </div>
                     <div class="${topic === 'Solicitar/Reserva' ? 'message' : 'response'}-content">
                         ${topic === 'Solicitar/Reserva' ? `
-Data: ${dados.data}
-Serviço: ${dados.servico}
+Cliente ID: ${dados.cliente_id}
+Origem: (${dados.origem.x}, ${dados.origem.y})
+Destino: (${dados.destino.x}, ${dados.destino.y})
+Bateria Atual: ${dados.bateria_atual}%
 Timestamp: ${new Date(dados.timestamp).toLocaleString()}
                         ` : `
+Cliente ID: ${dados.cliente_id}
 Status: ${dados.status}
 Mensagem: ${dados.mensagem}
-Postos Reservados: ${dados.postos_reservados ? dados.postos_reservados.join(', ') : 'Nenhum'}
+${dados.detalhes_rota ? `
+Rota Calculada:
+${dados.detalhes_rota.map((parada, index) => `
+${index + 1}. ${parada.tipo === 'posto' ? 'Posto' : 'Destino'}: ${parada.nome || 'Final'}
+   Coordenadas: (${parada.x}, ${parada.y})
+   ${parada.tipo === 'posto' ? `Bateria na chegada: ${parada.bateria_chegada}%` : `Bateria restante: ${parada.bateria_restante.toFixed(2)}%`}
+   Horário de chegada: ${parada.horario_chegada}
+`).join('')}
+` : ''}
 Timestamp: ${new Date(dados.timestamp).toLocaleString()}
                         `}
                     </div>

@@ -22,6 +22,7 @@ def main():
         {"url": "http://localhost:5000/adicionar_posto", "x": -1302.93, "y": -1302.93},
         {"url": "http://localhost:5000/adicionar_posto", "x": 394.14, "y": 394.14},
         {"url": "http://localhost:5000/adicionar_posto", "x": 2091.21, "y": 2091.21},
+        {"url": "http://localhost:5000/adicionar_posto", "x": -2484.31, "y": -2474.31},
         
         # Central 2 (porta 5001)
         {"url": "http://localhost:5001/adicionar_posto", "x": -737.24, "y": -737.24},

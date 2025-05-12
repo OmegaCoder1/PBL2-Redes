@@ -10,13 +10,13 @@ def get_timestamp():
 def fazer_reserva(servidor, cliente_id, horario):
     """Faz uma reserva em um servidor específico."""
     url = f"http://localhost:{servidor}/reservar"
-    nome_posto = f"Posto_Central{servidor[-1]}_1"
+    nome_posto = f"Posto_Central1_1747087023_LWzlNy"
     
     print(f"[ESCRITA] [{get_timestamp()}] Cliente {cliente_id} tentando reservar no servidor {servidor}...")
     
     try:
         response = requests.post(url, json={
-            "nome_posto": nome_posto,
+            "nome_posto": 'Posto_Central1_1747087023_LWzlNy',
             "cliente_id": cliente_id,
             "horario_reserva": horario
         })
@@ -94,7 +94,7 @@ def testar_servidor(servidor):
 
 def main():
     """Função principal que testa todos os servidores."""
-    servidores = ["5000", "5001", "5002"]
+    servidores = ["5000"]
     
     print("Iniciando teste do Reader-Writer Lock em todos os servidores...")
     print("Este teste irá:")

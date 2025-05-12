@@ -116,26 +116,20 @@ def encontrar_posto_mais_proximo(x, y, postos_disponiveis, bateria_atual):
     posto_mais_proximo = None
     menor_tempo = float('inf')
     
-    # Usa apenas a bateria restante (20%) para calcular a distância máxima
+    # Usa apenas a bateria mínima (20%) para calcular a distância máxima
     distancia_maxima = BATERIA_MINIMA * UNIDADES_POR_PORCENTAGEM
     
     logger.info(f"Procurando posto mais próximo de ({x}, {y}) com distância máxima de {distancia_maxima:.2f} unidades")
     
-    # Calcula a direção geral do movimento (positivo ou negativo para X e Y)
-    direcao_x = 1 if 3500 > x else -1
-    direcao_y = 1 if 3500 > y else -1
+    # Lista para armazenar postos candidatos
+    postos_candidatos = []
     
     for nome_posto, dados_posto in postos_disponiveis.items():
         tempo_espera = calcular_tempo_espera(dados_posto)
         distancia = calcular_distancia(x, y, dados_posto["x"], dados_posto["y"])
         
-        # Verifica se o posto está na direção correta
-        posto_direcao_x = 1 if dados_posto["x"] > x else -1
-        posto_direcao_y = 1 if dados_posto["y"] > y else -1
-        
-        # O posto está na direção correta se estiver se movendo na mesma direção geral
-        # ou se estiver dentro do alcance da bateria
-        if (posto_direcao_x == direcao_x or posto_direcao_y == direcao_y) and distancia <= distancia_maxima:
+        # Verifica se o posto está dentro do alcance da bateria
+        if distancia <= distancia_maxima:
             tempo_total = tempo_espera + distancia
             
             logger.info(f"""
@@ -143,19 +137,26 @@ def encontrar_posto_mais_proximo(x, y, postos_disponiveis, bateria_atual):
             - Posição: ({dados_posto['x']}, {dados_posto['y']})
             - Distância até o posto: {distancia:.2f} unidades
             - Bateria necessária: {distancia/UNIDADES_POR_PORCENTAGEM:.2f}%
-            - Direção do posto: ({posto_direcao_x}, {posto_direcao_y})
-            - Direção desejada: ({direcao_x}, {direcao_y})
             - Tempo de espera: {tempo_espera:.2f} segundos
             - Tempo total: {tempo_total:.2f} segundos
             """)
             
-            if tempo_total < menor_tempo:
-                menor_tempo = tempo_total
-                posto_mais_proximo = (nome_posto, dados_posto)
-                logger.info(f"Novo melhor posto encontrado: {nome_posto}")
+            # Adiciona o posto à lista de candidatos
+            postos_candidatos.append({
+                "nome": nome_posto,
+                "dados": dados_posto,
+                "distancia": distancia,
+                "tempo_total": tempo_total
+            })
     
-    if posto_mais_proximo:
-        logger.info(f"Posto escolhido: {posto_mais_proximo[0]} com tempo total de {menor_tempo:.2f} segundos")
+    # Ordena os candidatos por distância
+    postos_candidatos.sort(key=lambda x: x["distancia"])
+    
+    # Escolhe o melhor posto (mais próximo)
+    if postos_candidatos:
+        melhor_posto = postos_candidatos[0]  # Pega o mais próximo
+        posto_mais_proximo = (melhor_posto["nome"], melhor_posto["dados"])
+        logger.info(f"Posto escolhido: {melhor_posto['nome']} com tempo total de {melhor_posto['tempo_total']:.2f} segundos")
     else:
         logger.info("Nenhum posto adequado encontrado dentro do alcance")
     
@@ -286,6 +287,7 @@ def get_postos():
 def reservar_posto():
     """Rota para reservar um posto."""
     try:
+        
         dados = request.get_json()
         nome_posto = dados.get('nome_posto')
         cliente_id = dados.get('cliente_id')
@@ -303,9 +305,11 @@ def reservar_posto():
             
             # Simula um processamento demorado (5 segundos)
             logger.info("Processando reserva...")
-            time.sleep(5)
+            time.sleep(2)
             
             if nome_posto not in postos_central:
+                logger.info(f"Posto {nome_posto} não encontrado")
+                logger.info(f"Postos disponíveis: {postos_central}")
                 return jsonify({
                     "status": "erro",
                     "mensagem": f"Posto {nome_posto} não encontrado"
@@ -580,7 +584,6 @@ def on_message(client, userdata, msg):
             x_atual = x_inicial
             y_atual = y_inicial
             bateria_atual = BATERIA_INICIAL
-            tempo_total_viagem = 0
             horario_atual = horario_saida
             
             while True:
@@ -594,7 +597,7 @@ def on_message(client, userdata, msg):
                 logger.info(f"Distância máxima possível com bateria atual: {distancia_maxima:.2f} unidades")
                 
                 if distancia_restante <= distancia_maxima:
-                    logger.info("Rota calculada com sucesso! Pode chegar ao destino sem paradas adicionais.")
+                    logger.info("Pode chegar ao destino sem paradas!")
                     tempo_viagem_final = calcular_tempo_viagem(distancia_restante, distancia_restante/UNIDADES_POR_PORCENTAGEM)
                     horario_chegada_final = calcular_horario_chegada(horario_atual, tempo_viagem_final)
                     detalhes_rota.append({
@@ -614,32 +617,16 @@ def on_message(client, userdata, msg):
                 posto_mais_proximo = encontrar_posto_mais_proximo(x_parada, y_parada, todos_postos, bateria_atual)
                 
                 if posto_mais_proximo is None:
-                    # Se não encontrar posto próximo, verifica se pode chegar ao destino
-                    if distancia_restante <= (bateria_atual * UNIDADES_POR_PORCENTAGEM):
-                        logger.info("Pode chegar ao destino final com a bateria atual!")
-                        tempo_viagem_final = calcular_tempo_viagem(distancia_restante, distancia_restante/UNIDADES_POR_PORCENTAGEM)
-                        horario_chegada_final = calcular_horario_chegada(horario_atual, tempo_viagem_final)
-                        detalhes_rota.append({
-                            "tipo": "destino",
-                            "x": x_destino,
-                            "y": y_destino,
-                            "bateria_restante": bateria_atual - (distancia_restante / UNIDADES_POR_PORCENTAGEM),
-                            "horario_chegada": horario_chegada_final.strftime("%Y-%m-%d %H:%M:%S")
-                        })
-                        break
-                    else:
-                        # Se não pode chegar ao destino e não encontrou posto, retorna erro
-                        logger.error("Não foi possível encontrar um posto adequado para completar a rota")
-                        resposta = {
-                            "cliente_id": dados.get('cliente_id'),
-                            "postos_reservados": postos_reservados,
-                            "status": "erro",
-                            "mensagem": "Não foi possível encontrar um posto adequado para completar a rota",
-                            "detalhes_rota": detalhes_rota,
-                            "timestamp": time.time()
-                        }
-                        client.publish("Resposta/Reserva", json.dumps(resposta))
-                        return
+                    logger.error("Não foi possível encontrar um posto adequado para completar a rota")
+                    resposta = {
+                        "cliente_id": dados.get('cliente_id'),
+                        "postos_reservados": [],
+                        "status": "erro",
+                        "mensagem": "Não foi possível encontrar um posto adequado para completar a rota",
+                        "timestamp": time.time()
+                    }
+                    client.publish("Resposta/Reserva", json.dumps(resposta))
+                    return
                 
                 nome_posto, dados_posto = posto_mais_proximo
                 distancia_posto = calcular_distancia(x_atual, y_atual, dados_posto["x"], dados_posto["y"])
@@ -660,17 +647,13 @@ def on_message(client, userdata, msg):
                     "horario_chegada": horario_chegada.strftime("%Y-%m-%d %H:%M:%S")
                 })
                 
-                # Atualiza a posição atual, bateria e horário
+                # Atualiza a posição atual e o horário para o próximo cálculo
                 x_atual = dados_posto["x"]
                 y_atual = dados_posto["y"]
-                bateria_atual = BATERIA_INICIAL
+                bateria_atual = 100  # Bateria recarregada
                 horario_atual = horario_chegada
-                
-                # Remove o posto da lista de disponíveis para evitar duplicatas
-                todos_postos.pop(nome_posto, None)
             
-            # Tenta reservar cada posto da rota
-            postos_reservados_com_sucesso = []
+            # Tenta reservar todos os postos necessários
             for i, nome_posto in enumerate(postos_reservados):
                 try:
                     # Determina qual servidor possui o posto
@@ -692,66 +675,58 @@ def on_message(client, userdata, msg):
                     }, timeout=15)
                     
                     if response.status_code == 200:
-                        postos_reservados_com_sucesso.append(nome_posto)
                         logger.info(f"Posto {nome_posto} reservado com sucesso para o horário {horario_chegada}")
                     else:
-                        # Se falhar, cancela todas as reservas anteriores
                         logger.error(f"Falha ao reservar posto {nome_posto}")
-                        for posto_cancelar in postos_reservados_com_sucesso:
-                            if posto_cancelar.startswith("Posto_Central1"):
-                                url_cancelar = f"http://localhost:5000/cancelar"
-                            elif posto_cancelar.startswith("Posto_Central2"):
-                                url_cancelar = f"http://localhost:5001/cancelar"
-                            else:
-                                url_cancelar = f"http://localhost:5002/cancelar"
-                            
+                        # Cancela todas as reservas anteriores
+                        for j in range(i):
                             try:
-                                requests.post(url_cancelar, json={
-                                    "nome_posto": posto_cancelar,
+                                nome_posto_anterior = postos_reservados[j]
+                                if nome_posto_anterior.startswith("Posto_Central1"):
+                                    url = f"http://localhost:5000/cancelar"
+                                elif nome_posto_anterior.startswith("Posto_Central2"):
+                                    url = f"http://localhost:5001/cancelar"
+                                else:
+                                    url = f"http://localhost:5002/cancelar"
+                                
+                                requests.post(url, json={
+                                    "nome_posto": nome_posto_anterior,
                                     "cliente_id": dados.get('cliente_id'),
-                                    "horario_reserva": detalhes_rota[postos_reservados.index(posto_cancelar)]["horario_chegada"]
+                                    "horario_reserva": detalhes_rota[j]["horario_chegada"]
                                 }, timeout=15)
-                                logger.info(f"Reserva do posto {posto_cancelar} cancelada com sucesso")
-                            except requests.exceptions.RequestException as e:
-                                logger.error(f"Erro ao cancelar reserva do posto {posto_cancelar}: {e}")
+                            except:
+                                pass
                         
-                        # Verifica se foi erro 409 (conflito de horário)
-                        if response.status_code == 409:
-                            resposta = {
-                                "cliente_id": dados.get('cliente_id'),
-                                "postos_reservados": [],
-                                "status": "erro",
-                                "mensagem": f"O posto {nome_posto} já está reservado para o horário {horario_chegada}. Por favor, tente novamente com um horário diferente.",
-                                "codigo_erro": "CONFLITO_HORARIO",
-                                "horario_conflito": horario_chegada,
-                                "timestamp": time.time()
-                            }
-                        else:
-                            resposta = {
-                                "cliente_id": dados.get('cliente_id'),
-                                "postos_reservados": [],
-                                "status": "erro",
-                                "mensagem": f"Falha ao reservar posto {nome_posto}",
-                                "timestamp": time.time()
-                            }
+                        resposta = {
+                            "cliente_id": dados.get('cliente_id'),
+                            "postos_reservados": [],
+                            "status": "erro",
+                            "mensagem": f"Falha ao reservar posto {nome_posto}",
+                            "timestamp": time.time()
+                        }
                         client.publish("Resposta/Reserva", json.dumps(resposta))
                         return
                         
                 except requests.exceptions.RequestException as e:
                     logger.error(f"Erro ao reservar posto {nome_posto}: {e}")
                     # Cancela todas as reservas anteriores
-                    for posto_cancelar in postos_reservados_com_sucesso:
-                        if posto_cancelar.startswith("Posto_Central1"):
-                            url_cancelar = f"http://localhost:5000/cancelar"
-                        elif posto_cancelar.startswith("Posto_Central2"):
-                            url_cancelar = f"http://localhost:5001/cancelar"
-                        else:
-                            url_cancelar = f"http://localhost:5002/cancelar"
-                        requests.post(url_cancelar, json={
-                            "nome_posto": posto_cancelar,
-                            "cliente_id": dados.get('cliente_id'),
-                            "horario_reserva": detalhes_rota[postos_reservados.index(posto_cancelar)]["horario_chegada"]
-                        }, timeout=15)
+                    for j in range(i):
+                        try:
+                            nome_posto_anterior = postos_reservados[j]
+                            if nome_posto_anterior.startswith("Posto_Central1"):
+                                url = f"http://localhost:5000/cancelar"
+                            elif nome_posto_anterior.startswith("Posto_Central2"):
+                                url = f"http://localhost:5001/cancelar"
+                            else:
+                                url = f"http://localhost:5002/cancelar"
+                            
+                            requests.post(url, json={
+                                "nome_posto": nome_posto_anterior,
+                                "cliente_id": dados.get('cliente_id'),
+                                "horario_reserva": detalhes_rota[j]["horario_chegada"]
+                            }, timeout=15)
+                        except:
+                            pass
                     
                     resposta = {
                         "cliente_id": dados.get('cliente_id'),
@@ -763,12 +738,12 @@ def on_message(client, userdata, msg):
                     client.publish("Resposta/Reserva", json.dumps(resposta))
                     return
             
-            # Publica a resposta com os postos reservados
+            # Publica a resposta com os detalhes da rota
             resposta = {
                 "cliente_id": dados.get('cliente_id'),
-                "postos_reservados": postos_reservados_com_sucesso,
+                "postos_reservados": postos_reservados,
                 "status": "sucesso",
-                "mensagem": "Rota calculada e postos reservados com sucesso",
+                "mensagem": "Todos os postos necessários foram reservados com sucesso",
                 "detalhes_rota": detalhes_rota,
                 "timestamp": time.time()
             }
