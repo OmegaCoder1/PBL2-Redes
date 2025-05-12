@@ -136,5 +136,5 @@ Exemplo de fluxo -> Exemplo de fluxo
 <h2>📝 Licença</h2>
 
 <p>
-Este projeto foi desenvolvido exclusivamente para fins acadêmicos na disciplina de Redes de Computadores.
+Este projeto foi desenvolvido exclusivamente para fins acadêmicos na disciplina de TEC 502 - MI Concorrência e Conectividade.
 </p>
