@@ -65,8 +65,8 @@ class ClienteMQTT:
             "y": 0
         }
         destino = {
-            "x": -50,
-            "y": 0
+            "x": -850,
+            "y": 350
         }
         return origem, destino
         

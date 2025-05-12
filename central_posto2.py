@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Configuração do Flask
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Habilita CORS para todas as rotas
 
 # Locks para controle de concorrência
 lock = Lock()  # Lock principal
@@ -33,13 +33,44 @@ UNIDADES_POR_PORCENTAGEM = 10  # Unidades que o carro pode percorrer por 1% de b
 TEMPO_BATERIA_TOTAL = 3 * 60 * 60  # 3 horas em segundos
 
 # Ranges de geração de postos para esta central
-X_MIN = -500
-X_MAX = 0
-Y_MIN = -1000
-Y_MAX = 1000
+X_MIN = -2000
+X_MAX = -1500
+Y_MIN = -2000
+Y_MAX = 2500
 
 # Dicionário global para armazenar os postos desta central
 postos_central = {}
+
+def adquirir_lock_leitura():
+    """Adquire o lock para leitura."""
+    global leitores
+    with lock:
+        while escritor:  # Espera se houver escritor ativo
+            cond.wait()
+        leitores += 1
+
+def liberar_lock_leitura():
+    """Libera o lock de leitura."""
+    global leitores
+    with lock:
+        leitores -= 1
+        if leitores == 0:
+            cond.notify_all()  # Notifica escritores em espera
+
+def adquirir_lock_escrita():
+    """Adquire o lock para escrita."""
+    global escritor
+    with lock:
+        while escritor or leitores > 0:  # Espera se houver escritor ou leitores
+            cond.wait()
+        escritor = True
+
+def liberar_lock_escrita():
+    """Libera o lock de escrita."""
+    global escritor
+    with lock:
+        escritor = False
+        cond.notify_all()  # Notifica todos os leitores e escritores em espera
 
 def calcular_distancia(x1, y1, x2, y2):
     """Calcula a distância Euclidiana entre dois pontos."""
@@ -102,9 +133,17 @@ def calcular_ponto_parada(x_inicial, y_inicial, x_destino, y_destino, bateria_at
     # Calcula a proporção da distância percorrida
     proporcao = distancia_percorrida / distancia_total
     
-    # Calcula o ponto de parada
+    # Calcula o ponto de parada mantendo a mesma direção
     x_parada = x_inicial + (x_destino - x_inicial) * proporcao
     y_parada = y_inicial + (y_destino - y_inicial) * proporcao
+    
+    # Verifica se a distância real não excede o máximo permitido
+    distancia_real = calcular_distancia(x_inicial, y_inicial, x_parada, y_parada)
+    if distancia_real > distancia_percorrida:
+        # Ajusta o ponto para garantir que não exceda a distância máxima
+        fator_ajuste = distancia_percorrida / distancia_real
+        x_parada = x_inicial + (x_parada - x_inicial) * fator_ajuste
+        y_parada = y_inicial + (y_parada - y_inicial) * fator_ajuste
     
     return x_parada, y_parada
 
@@ -142,40 +181,8 @@ def inicializar_postos_ficticios(num_postos=4):
         
         logger.info(f"Posto fictício criado: {nome_posto} em ({x}, {y})")
     
-    
     logger.info(f"Total de {len(postos_central)} postos fictícios inicializados")
     return postos_central
-
-def adquirir_lock_leitura():
-    """Adquire o lock para leitura."""
-    global leitores
-    with lock:
-        while escritor:  # Espera se houver escritor ativo
-            cond.wait()
-        leitores += 1
-
-def liberar_lock_leitura():
-    """Libera o lock de leitura."""
-    global leitores
-    with lock:
-        leitores -= 1
-        if leitores == 0:
-            cond.notify_all()  # Notifica escritores em espera
-
-def adquirir_lock_escrita():
-    """Adquire o lock para escrita."""
-    global escritor
-    with lock:
-        while escritor or leitores > 0:  # Espera se houver escritor ou leitores
-            cond.wait()
-        escritor = True
-
-def liberar_lock_escrita():
-    """Libera o lock de escrita."""
-    global escritor
-    with lock:
-        escritor = False
-        cond.notify_all()  # Notifica todos os leitores e escritores em espera
 
 # Rota Flask para retornar o dicionário de postos
 @app.route('/postos', methods=['GET'])
@@ -372,12 +379,21 @@ def on_message(client, userdata, msg):
             # Faz requisições para os outros servidores
             try:
                 # Requisição para o servidor 1
-                response1 = requests.get("http://localhost:5000/postos", timeout=5)
+                response1 = requests.get("http://localhost:5000/postos", timeout=10)
                 if response1.status_code == 200:
                     postos_servidor1 = response1.json()
                     todos_postos.update(postos_servidor1)
                     logger.info(f"Postos do servidor 1 adicionados: {len(postos_servidor1)}")
+                    
+                # Requisição para o servidor 2
+                response2 = requests.get("http://localhost:5002/postos", timeout=10)
+                if response2.status_code == 200:
+                    postos_servidor2 = response2.json()
+                    todos_postos.update(postos_servidor2)
+                    logger.info(f"Postos do servidor 2 adicionados: {len(postos_servidor2)}")
                 
+            except requests.exceptions.Timeout:
+                logger.error("Timeout ao tentar acessar o servidor ")
             except requests.exceptions.RequestException as e:
                 logger.error(f"Erro ao fazer requisição para outros servidores: {e}")
             
@@ -481,8 +497,10 @@ def on_message(client, userdata, msg):
                     # Determina qual servidor possui o posto
                     if nome_posto.startswith("Posto_Central1"):
                         url = f"http://localhost:5000/reservar"
-                    else:
+                    elif nome_posto.startswith("Posto_Central2"):
                         url = f"http://localhost:5001/reservar"
+                    else:
+                        url = f"http://localhost:5002/reservar"
                     
                     # Obtém o horário de chegada deste posto
                     horario_chegada = detalhes_rota[i]["horario_chegada"]
@@ -503,13 +521,20 @@ def on_message(client, userdata, msg):
                         for posto_cancelar in postos_reservados_com_sucesso:
                             if posto_cancelar.startswith("Posto_Central1"):
                                 url_cancelar = f"http://localhost:5000/cancelar"
-                            else:
+                            elif posto_cancelar.startswith("Posto_Central2"):
                                 url_cancelar = f"http://localhost:5001/cancelar"
-                            requests.post(url_cancelar, json={
-                                "nome_posto": posto_cancelar,
-                                "cliente_id": dados.get('cliente_id'),
-                                "horario_reserva": detalhes_rota[postos_reservados.index(posto_cancelar)]["horario_chegada"]
-                            }, timeout=5)
+                            else:
+                                url_cancelar = f"http://localhost:5002/cancelar"
+                            
+                            try:
+                                requests.post(url_cancelar, json={
+                                    "nome_posto": posto_cancelar,
+                                    "cliente_id": dados.get('cliente_id'),
+                                    "horario_reserva": detalhes_rota[postos_reservados.index(posto_cancelar)]["horario_chegada"]
+                                }, timeout=5)
+                                logger.info(f"Reserva do posto {posto_cancelar} cancelada com sucesso")
+                            except requests.exceptions.RequestException as e:
+                                logger.error(f"Erro ao cancelar reserva do posto {posto_cancelar}: {e}")
                         
                         # Verifica se foi erro 409 (conflito de horário)
                         if response.status_code == 409:
@@ -539,8 +564,10 @@ def on_message(client, userdata, msg):
                     for posto_cancelar in postos_reservados_com_sucesso:
                         if posto_cancelar.startswith("Posto_Central1"):
                             url_cancelar = f"http://localhost:5000/cancelar"
-                        else:
+                        elif posto_cancelar.startswith("Posto_Central2"):
                             url_cancelar = f"http://localhost:5001/cancelar"
+                        else:
+                            url_cancelar = f"http://localhost:5002/cancelar"
                         requests.post(url_cancelar, json={
                             "nome_posto": posto_cancelar,
                             "cliente_id": dados.get('cliente_id'),
@@ -597,7 +624,7 @@ if __name__ == "__main__":
     try:
         # Conectando ao broker local
         logger.info("Conectando ao broker MQTT local...")
-        client.connect("localhost", 1884, 60)  # Usando a porta 1884
+        client.connect("localhost", 1884, 60)  # Usando a porta 1883
         
         # Iniciando o loop de eventos MQTT em uma thread separada
         client.loop_start()
@@ -605,7 +632,7 @@ if __name__ == "__main__":
         # Iniciando o servidor Flask
         logger.info("""
         ============================================
-        Servidor Central 2 Iniciado
+        Servidor Central 1 Iniciado
         Flask rodando na porta 5001
         MQTT escutando no tópico: Solicitar/Reserva
         Broker: localhost:1884
@@ -614,8 +641,8 @@ if __name__ == "__main__":
         app.run(host='0.0.0.0', port=5001)
         
     except KeyboardInterrupt:
-        logger.info("Servidor Central 2 encerrado pelo usuário.")
+        logger.info("Servidor Central 1 encerrado pelo usuário.")
     except Exception as e:
         logger.error(f"Erro ao iniciar o servidor: {e}")
     finally:
-        client.disconnect()
+        client.disconnect() 
