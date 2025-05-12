@@ -33,10 +33,10 @@ UNIDADES_POR_PORCENTAGEM = 10  # Unidades que o carro pode percorrer por 1% de b
 TEMPO_BATERIA_TOTAL = 3 * 60 * 60  # 3 horas em segundos
 
 # Ranges de geração de postos para esta central
-X_MIN = -2000
-X_MAX = -1500
-Y_MIN = -2000
-Y_MAX = 2500
+X_MIN = -1000
+X_MAX = 0
+Y_MIN = -1000
+Y_MAX = 0
 
 # Dicionário global para armazenar os postos desta central
 postos_central = {}
@@ -107,19 +107,49 @@ def encontrar_posto_mais_proximo(x, y, postos_disponiveis, bateria_atual):
     """
     posto_mais_proximo = None
     menor_tempo = float('inf')
-    distancia_maxima = (bateria_atual - BATERIA_MINIMA) * UNIDADES_POR_PORCENTAGEM
+    
+    # Usa apenas a bateria restante (20%) para calcular a distância máxima
+    distancia_maxima = BATERIA_MINIMA * UNIDADES_POR_PORCENTAGEM
+    
+    logger.info(f"Procurando posto mais próximo de ({x}, {y}) com distância máxima de {distancia_maxima:.2f} unidades")
+    
+    # Calcula a direção geral do movimento (positivo ou negativo para X e Y)
+    direcao_x = 1 if 3500 > x else -1
+    direcao_y = 1 if 3500 > y else -1
     
     for nome_posto, dados_posto in postos_disponiveis.items():
         tempo_espera = calcular_tempo_espera(dados_posto)
         distancia = calcular_distancia(x, y, dados_posto["x"], dados_posto["y"])
         
-        # Verifica se o posto está dentro do alcance possível
-        if distancia <= distancia_maxima:
+        # Verifica se o posto está na direção correta
+        posto_direcao_x = 1 if dados_posto["x"] > x else -1
+        posto_direcao_y = 1 if dados_posto["y"] > y else -1
+        
+        # O posto está na direção correta se estiver se movendo na mesma direção geral
+        # ou se estiver dentro do alcance da bateria
+        if (posto_direcao_x == direcao_x or posto_direcao_y == direcao_y) and distancia <= distancia_maxima:
             tempo_total = tempo_espera + distancia
+            
+            logger.info(f"""
+            Analisando posto {nome_posto}:
+            - Posição: ({dados_posto['x']}, {dados_posto['y']})
+            - Distância até o posto: {distancia:.2f} unidades
+            - Bateria necessária: {distancia/UNIDADES_POR_PORCENTAGEM:.2f}%
+            - Direção do posto: ({posto_direcao_x}, {posto_direcao_y})
+            - Direção desejada: ({direcao_x}, {direcao_y})
+            - Tempo de espera: {tempo_espera:.2f} segundos
+            - Tempo total: {tempo_total:.2f} segundos
+            """)
             
             if tempo_total < menor_tempo:
                 menor_tempo = tempo_total
                 posto_mais_proximo = (nome_posto, dados_posto)
+                logger.info(f"Novo melhor posto encontrado: {nome_posto}")
+    
+    if posto_mais_proximo:
+        logger.info(f"Posto escolhido: {posto_mais_proximo[0]} com tempo total de {menor_tempo:.2f} segundos")
+    else:
+        logger.info("Nenhum posto adequado encontrado dentro do alcance")
     
     return posto_mais_proximo
 
@@ -182,7 +212,7 @@ def gerar_codigo_aleatorio(tamanho=6):
     caracteres = string.ascii_letters + string.digits
     return ''.join(random.choice(caracteres) for _ in range(tamanho))
 
-def inicializar_postos_ficticios(num_postos=4):
+def inicializar_postos_ficticios(num_postos=20):
     """Inicializa o dicionário com postos fictícios."""
     global postos_central
     
@@ -209,9 +239,21 @@ def inicializar_postos_ficticios(num_postos=4):
             "reservas": []  # Lista de reservas com horários
         }
         
-        logger.info(f"Posto fictício criado: {nome_posto} em ({x}, {y})")
+        logger.info(f"""
+        ===== Novo Posto Criado =====
+        Nome: {nome_posto}
+        Posição: ({x}, {y})
+        Status: Disponível
+        ===========================
+        """)
     
-    logger.info(f"Total de {len(postos_central)} postos fictícios inicializados")
+    logger.info(f"""
+    ===== Postos da Central 3 =====
+    Total de postos: {len(postos_central)}
+    Postos disponíveis:
+    {json.dumps(postos_central, indent=2)}
+    ===========================
+    """)
     return postos_central
 
 # Rota Flask para retornar o dicionário de postos
@@ -357,6 +399,60 @@ def cancelar_reserva():
             "mensagem": f"Erro ao processar requisição: {str(e)}"
         }), 500
 
+# Rota Flask para adicionar um posto manualmente
+@app.route('/adicionar_posto', methods=['POST'])
+def adicionar_posto():
+    """Rota para adicionar um posto manualmente."""
+    try:
+        dados = request.get_json()
+        
+        # Validação dos dados obrigatórios
+        if not all(key in dados for key in ['x', 'y']):
+            return jsonify({
+                "status": "erro",
+                "mensagem": "Parâmetros 'x' e 'y' são obrigatórios"
+            }), 400
+            
+        adquirir_lock_escrita()
+        try:
+            # Gera nome do posto
+            timestamp = int(time.time())
+            random_code = gerar_codigo_aleatorio()
+            nome_posto = f"Posto_Central3_{timestamp}_{random_code}"
+            
+            # Adiciona o posto ao dicionário mantendo o padrão existente
+            postos_central[nome_posto] = {
+                "x": float(dados['x']),
+                "y": float(dados['y']),
+                "ocupado": False,
+                "id": None,
+                "reservas": []
+            }
+            
+            logger.info(f"""
+            ===== Novo Posto Adicionado Manualmente =====
+            Nome: {nome_posto}
+            Posição: ({dados['x']}, {dados['y']})
+            Status: Disponível
+            =========================================
+            """)
+            
+            return jsonify({
+                "status": "sucesso",
+                "mensagem": f"Posto {nome_posto} adicionado com sucesso",
+                "posto": postos_central[nome_posto]
+            })
+            
+        finally:
+            liberar_lock_escrita()
+            
+    except Exception as e:
+        logger.error(f"Erro ao adicionar posto: {e}")
+        return jsonify({
+            "status": "erro",
+            "mensagem": f"Erro ao adicionar posto: {str(e)}"
+        }), 500
+
 # Configuração do cliente MQTT
 client = mqtt.Client()
 
@@ -373,16 +469,19 @@ def on_connect(client, userdata, flags, rc):
 # Callback quando uma mensagem é recebida
 def on_message(client, userdata, msg):
     try:
-        logger.info(f"Mensagem recebida no tópico {msg.topic}")
-        payload = msg.payload.decode()
-        logger.info(f"Payload recebido: {payload}")
+        logger.info(f"""
+        ===== Nova Mensagem Recebida =====
+        Tópico: {msg.topic}
+        Payload: {msg.payload.decode()}
+        ===============================
+        """)
         
         # Tenta converter para JSON
         try:
-            dados = json.loads(payload)
+            dados = json.loads(msg.payload.decode())
             logger.info(f"""
             ===== Nova Solicitação de Reserva =====
-            De: Cliente ID {dados.get('cliente_id', 'N/A')}
+            Cliente ID: {dados.get('cliente_id', 'N/A')}
             Origem: ({dados.get('origem', {}).get('x', 'N/A')}, {dados.get('origem', {}).get('y', 'N/A')})
             Destino: ({dados.get('destino', {}).get('x', 'N/A')}, {dados.get('destino', {}).get('y', 'N/A')})
             Bateria: {dados.get('bateria_atual', 'N/A')}%
@@ -404,7 +503,13 @@ def on_message(client, userdata, msg):
             
             # Adiciona os postos desta central
             todos_postos.update(postos_central)
-            logger.info(f"Postos desta central: {len(postos_central)}")
+            logger.info(f"""
+            ===== Postos Disponíveis =====
+            Postos desta central: {len(postos_central)}
+            Detalhes dos postos:
+            {json.dumps(postos_central, indent=2)}
+            ===========================
+            """)
             
             # Faz requisições para os outros servidores
             try:
@@ -413,21 +518,39 @@ def on_message(client, userdata, msg):
                 if response1.status_code == 200:
                     postos_servidor1 = response1.json()
                     todos_postos.update(postos_servidor1)
-                    logger.info(f"Postos do servidor 1 adicionados: {len(postos_servidor1)}")
+                    logger.info(f"""
+                    ===== Postos do Servidor 1 =====
+                    Total: {len(postos_servidor1)}
+                    Detalhes:
+                    {json.dumps(postos_servidor1, indent=2)}
+                    ===========================
+                    """)
                     
                 # Requisição para o servidor 2
                 response2 = requests.get("http://localhost:5001/postos", timeout=10)
                 if response2.status_code == 200:
                     postos_servidor2 = response2.json()
                     todos_postos.update(postos_servidor2)
-                    logger.info(f"Postos do servidor 2 adicionados: {len(postos_servidor2)}")
+                    logger.info(f"""
+                    ===== Postos do Servidor 2 =====
+                    Total: {len(postos_servidor2)}
+                    Detalhes:
+                    {json.dumps(postos_servidor2, indent=2)}
+                    ===========================
+                    """)
                 
             except requests.exceptions.Timeout:
-                logger.error("Timeout ao tentar acessar o servidor ")
+                logger.error("Timeout ao tentar acessar o servidor")
             except requests.exceptions.RequestException as e:
                 logger.error(f"Erro ao fazer requisição para outros servidores: {e}")
             
-            logger.info(f"Total de postos disponíveis: {len(todos_postos)}")
+            logger.info(f"""
+            ===== Resumo dos Postos =====
+            Total de postos disponíveis: {len(todos_postos)}
+            Detalhes de todos os postos:
+            {json.dumps(todos_postos, indent=2)}
+            ===========================
+            """)
             
             if len(todos_postos) == 0:
                 logger.error("Nenhum posto disponível para cálculo da rota")
@@ -480,17 +603,30 @@ def on_message(client, userdata, msg):
                 posto_mais_proximo = encontrar_posto_mais_proximo(x_parada, y_parada, todos_postos, bateria_atual)
                 
                 if posto_mais_proximo is None:
-                    logger.error("Não foi possível encontrar um posto adequado para a rota")
-                    resposta = {
-                        "cliente_id": dados.get('cliente_id'),
-                        "postos_reservados": postos_reservados,
-                        "status": "erro",
-                        "mensagem": "Não foi possível encontrar um posto adequado para completar a rota",
-                        "detalhes_rota": detalhes_rota,
-                        "timestamp": time.time()
-                    }
-                    client.publish("Resposta/Reserva", json.dumps(resposta))
-                    return
+                    # Se não encontrar posto próximo, verifica se pode chegar ao destino
+                    if distancia_restante <= (bateria_atual * UNIDADES_POR_PORCENTAGEM):
+                        logger.info("Pode chegar ao destino final com a bateria atual!")
+                        detalhes_rota.append({
+                            "tipo": "destino",
+                            "x": x_destino,
+                            "y": y_destino,
+                            "bateria_restante": bateria_atual - (distancia_restante / UNIDADES_POR_PORCENTAGEM),
+                            "horario_chegada": calcular_horario_chegada(horario_saida, tempo_total_viagem).strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        break
+                    else:
+                        # Se não pode chegar ao destino e não encontrou posto, retorna erro
+                        logger.error("Não foi possível encontrar um posto adequado para completar a rota")
+                        resposta = {
+                            "cliente_id": dados.get('cliente_id'),
+                            "postos_reservados": postos_reservados,
+                            "status": "erro",
+                            "mensagem": "Não foi possível encontrar um posto adequado para completar a rota",
+                            "detalhes_rota": detalhes_rota,
+                            "timestamp": time.time()
+                        }
+                        client.publish("Resposta/Reserva", json.dumps(resposta))
+                        return
                 
                 nome_posto, dados_posto = posto_mais_proximo
                 distancia_posto = calcular_distancia(x_parada, y_parada, dados_posto["x"], dados_posto["y"])

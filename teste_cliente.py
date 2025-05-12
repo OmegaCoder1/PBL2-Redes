@@ -61,12 +61,12 @@ class ClienteMQTT:
     def gerar_coordenadas(self):
         """Gera coordenadas aleatórias para origem e destino."""
         origem = {
-            "x": -10,
-            "y": 0
+            "x": -3000,
+            "y": -3000
         }
         destino = {
-            "x": -850,
-            "y": 350
+            "x": 3000,
+            "y": 3000
         }
         return origem, destino
         
