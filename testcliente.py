@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Lista de portas disponíveis
-PORTAS_MQTT = [1883, 1884, 1885]
+PORTAS_MQTT = [1884, 1885, 1886]
 
 # Variável global para armazenar a resposta
 resposta_recebida = None
@@ -20,9 +20,9 @@ def on_connect(client, userdata, flags, rc):
     """Callback quando conecta ao broker."""
     if rc == 0:
         logger.info(f"Conectado ao broker MQTT na porta {client._port}")
-        # Inscreve no tópico de resposta
+        # Inscreve no tópico de resposta na mesma porta
         client.subscribe("Resposta/Reserva")
-        logger.info("Inscrito no tópico: Resposta/Reserva")
+        logger.info(f"Inscrito no tópico: Resposta/Reserva na porta {client._port}")
     else:
         logger.error(f"Falha na conexão, código de retorno: {rc}")
 
@@ -32,7 +32,7 @@ def on_message(client, userdata, msg):
     
     try:
         dados = json.loads(msg.payload.decode())
-        logger.info(f"Mensagem recebida: {dados}")
+        logger.info(f"Mensagem recebida na porta {client._port}: {dados}")
         
         # Verifica se a resposta é para este cliente
         if dados.get('cliente_id') == client._client_id:
@@ -89,7 +89,7 @@ def main():
     client.on_message = on_message
     
     try:
-        # Conecta ao broker
+        # Conecta ao broker na porta selecionada
         client.connect("localhost", porta, 60)
         client.loop_start()
         
@@ -112,7 +112,7 @@ def main():
         
         # Publica a mensagem
         client.publish("Solicitar/Reserva", json.dumps(dados))
-        logger.info(f"Mensagem publicada para o tópico Solicitar/Reserva")
+        logger.info(f"Mensagem publicada para o tópico Solicitar/Reserva na porta {porta}")
         
         # Aguarda a resposta por 2 minutos
         if resposta_recebida_event.wait(timeout=120):

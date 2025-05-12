@@ -100,11 +100,12 @@ def calcular_tempo_espera(posto):
         return 0  # Sem reservas, sem espera
         
     # Ordena as reservas por horário
-    reservas_ordenadas = sorted(posto['reservas'], key=lambda x: x['horario_reserva'])
+    reservas_ordenadas = sorted(posto['reservas'], key=lambda x: x['horario'])
     
     # Encontra o primeiro horário disponível após a última reserva
     ultima_reserva = reservas_ordenadas[-1]
-    tempo_espera = (ultima_reserva['horario_reserva'] - datetime.now()).total_seconds()
+    horario_reserva = datetime.strptime(ultima_reserva['horario'], "%Y-%m-%d %H:%M:%S")
+    tempo_espera = (horario_reserva - datetime.now()).total_seconds()
     
     return max(0, tempo_espera)  # Retorna 0 se o tempo de espera for negativo
 
@@ -472,9 +473,10 @@ client = mqtt.Client()
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.info("Conectado ao broker MQTT local")
-        # Inscrevendo no tópico de reservas
+        # Inscrevendo nos tópicos
         client.subscribe("Solicitar/Reserva")
-        logger.info("Inscrito no tópico: Solicitar/Reserva")
+        client.subscribe("Resposta/Reserva")
+        logger.info("Inscrito nos tópicos: Solicitar/Reserva e Resposta/Reserva")
     else:
         logger.error(f"Falha na conexão, código de retorno: {rc}")
 
@@ -488,6 +490,10 @@ def on_message(client, userdata, msg):
         ===============================
         """)
         
+        # Só processa mensagens do tópico Solicitar/Reserva
+        if msg.topic != "Solicitar/Reserva":
+            return
+            
         # Tenta converter para JSON
         try:
             dados = json.loads(msg.payload.decode())
@@ -778,7 +784,7 @@ if __name__ == "__main__":
     try:
         # Conectando ao broker local
         logger.info("Conectando ao broker MQTT local...")
-        client.connect("localhost", 1883, 60)  # Usando a porta 1883
+        client.connect("localhost", 1886, 60)  # Usando a porta 1883
         
         # Iniciando o loop de eventos MQTT em uma thread separada
         client.loop_start()
@@ -789,7 +795,7 @@ if __name__ == "__main__":
         Servidor Central 1 Iniciado
         Flask rodando na porta 5000
         MQTT escutando no tópico: Solicitar/Reserva
-        Broker: localhost:1883
+        Broker: localhost:1886
         ============================================
         """)
         app.run(host='0.0.0.0', port=5000)
