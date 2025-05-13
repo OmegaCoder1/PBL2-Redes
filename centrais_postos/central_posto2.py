@@ -33,10 +33,10 @@ UNIDADES_POR_PORCENTAGEM = 10  # Unidades que o carro pode percorrer por 1% de b
 TEMPO_BATERIA_TOTAL = 3 * 60 * 60  # 3 horas em segundos
 
 # Ranges de geração de postos para esta central
-X_MIN = -1000
-X_MAX = 0
-Y_MIN = -1000
-Y_MAX = 0
+X_MIN = -2000
+X_MAX = -1500
+Y_MIN = -2000
+Y_MAX = -1500
 
 # Dicionário global para armazenar os postos desta central
 postos_central = {}
@@ -222,7 +222,7 @@ def gerar_codigo_aleatorio(tamanho=6):
     caracteres = string.ascii_letters + string.digits
     return ''.join(random.choice(caracteres) for _ in range(tamanho))
 
-def inicializar_postos_ficticios(num_postos=20):
+def inicializar_postos_ficticios(num_postos=5000):
     """Inicializa o dicionário com postos fictícios."""
     global postos_central
     
@@ -238,7 +238,7 @@ def inicializar_postos_ficticios(num_postos=20):
         # Gera nome do posto
         timestamp = int(time.time())
         random_code = gerar_codigo_aleatorio()
-        nome_posto = f"Posto_Central3_{timestamp}_{random_code}"
+        nome_posto = f"Posto_Central2_{timestamp}_{random_code}"
         
         # Adiciona o posto ao dicionário
         postos_central[nome_posto] = {
@@ -428,7 +428,7 @@ def adicionar_posto():
             # Gera nome do posto
             timestamp = int(time.time())
             random_code = gerar_codigo_aleatorio()
-            nome_posto = f"Posto_Central3_{timestamp}_{random_code}"
+            nome_posto = f"Posto_Central2_{timestamp}_{random_code}"
             
             # Adiciona o posto ao dicionário mantendo o padrão existente
             postos_central[nome_posto] = {
@@ -542,7 +542,7 @@ def on_message(client, userdata, msg):
                     """)
                     
                 # Requisição para o servidor 2
-                response2 = requests.get("http://localhost:5001/postos", timeout=15)
+                response2 = requests.get("http://localhost:5002/postos", timeout=15)
                 if response2.status_code == 200:
                     postos_servidor2 = response2.json()
                     todos_postos.update(postos_servidor2)
@@ -781,7 +781,7 @@ if __name__ == "__main__":
     try:
         # Conectando ao broker local
         logger.info("Conectando ao broker MQTT local...")
-        client.connect("localhost", 1885, 60)  # Usando a porta 1883
+        client.connect("localhost", 1884, 60)  # Usando a porta 1883
         
         # Iniciando o loop de eventos MQTT em uma thread separada
         client.loop_start()
@@ -790,12 +790,12 @@ if __name__ == "__main__":
         logger.info("""
         ============================================
         Servidor Central 1 Iniciado
-        Flask rodando na porta 5002
+        Flask rodando na porta 5001
         MQTT escutando no tópico: Solicitar/Reserva
-        Broker: localhost:1885
+        Broker: localhost:1884
         ============================================
         """)
-        app.run(host='0.0.0.0', port=5002)
+        app.run(host='0.0.0.0', port=5001)
         
     except KeyboardInterrupt:
         logger.info("Servidor Central 1 encerrado pelo usuário.")

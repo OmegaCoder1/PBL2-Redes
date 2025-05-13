@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Lista de portas disponíveis
 PORTAS_MQTT = [1884, 1885, 1886]
+MAX_TENTATIVAS = 3
 
 # Variável global para armazenar a resposta
 resposta_recebida = None
@@ -69,62 +70,84 @@ def formatar_resposta(dados):
     print(f"Horário de chegada: {destino['horario_chegada']}")
     print("\n=====================")
 
+def tentar_conexao(porta, client_id):
+    """Tenta conectar ao broker MQTT na porta especificada."""
+    try:
+        client = mqtt.Client()
+        client._port = porta
+        client._client_id = client_id
+        
+        # Configura os callbacks
+        client.on_connect = on_connect
+        client.on_message = on_message
+        
+        # Conecta ao broker
+        client.connect("localhost", porta, 60)
+        client.loop_start()
+        return client
+    except Exception as e:
+        logger.error(f"Erro ao conectar na porta {porta}: {str(e)}")
+        return None
+
 def main():
     global resposta_recebida_event
     
-    # Sorteia uma porta
-    porta = random.choice(PORTAS_MQTT)
-    logger.info(f"Porta MQTT selecionada: {porta}")
-    
-    # Cria o cliente MQTT
-    client = mqtt.Client()
-    client._port = porta  # Armazena a porta no objeto do cliente
-    
     # Gera um ID único para o cliente
     client_id = f"cliente_{int(time.time())}"
-    client._client_id = client_id
     
-    # Configura os callbacks
-    client.on_connect = on_connect
-    client.on_message = on_message
+    # Dados da requisição
+    dados = {
+        "cliente_id": client_id,
+        "origem": {
+            "x": -3000,
+            "y": -3000
+        },
+        "destino": {
+            "x": 3000,
+            "y": 3000
+        },
+        "bateria_atual": 100
+    }
     
-    try:
-        # Conecta ao broker na porta selecionada
-        client.connect("localhost", porta, 60)
-        client.loop_start()
-        
-        # Cria o evento para sincronização
-        resposta_recebida_event = threading.Event()
-        
-        # Dados da requisição
-        dados = {
-            "cliente_id": client_id,
-            "origem": {
-                "x": -3000,
-                "y": -3000
-            },
-            "destino": {
-                "x": 3000,
-                "y": 3000
-            },
-            "bateria_atual": 100
-        }
-        
-        # Publica a mensagem
-        client.publish("Solicitar/Reserva", json.dumps(dados))
-        logger.info(f"Mensagem publicada para o tópico Solicitar/Reserva na porta {porta}")
-        
-        # Aguarda a resposta por 2 minutos
-        if resposta_recebida_event.wait(timeout=120):
-            formatar_resposta(resposta_recebida)
-        else:
-            print("Timeout: Nenhuma resposta recebida após 2 minutos")
+    # Embaralha a lista de portas para tentar em ordem aleatória
+    portas_disponiveis = PORTAS_MQTT.copy()
+    random.shuffle(portas_disponiveis)
+    
+    # Tenta conectar em cada porta
+    for tentativa in range(MAX_TENTATIVAS):
+        for porta in portas_disponiveis:
+            logger.info(f"Tentativa {tentativa + 1}: Tentando conectar na porta {porta}")
+            client = tentar_conexao(porta, client_id)
             
-    except Exception as e:
-        logger.error(f"Erro: {e}")
-    finally:
-        client.loop_stop()
-        client.disconnect()
+            if client:
+                try:
+                    # Cria o evento para sincronização
+                    resposta_recebida_event = threading.Event()
+                    
+                    # Publica a mensagem
+                    client.publish("Solicitar/Reserva", json.dumps(dados))
+                    logger.info(f"Mensagem publicada para o tópico Solicitar/Reserva na porta {porta}")
+                    
+                    # Aguarda a resposta por 2 minutos
+                    if resposta_recebida_event.wait(timeout=120):
+                        formatar_resposta(resposta_recebida)
+                        client.loop_stop()
+                        client.disconnect()
+                        return
+                    else:
+                        logger.warning("Timeout: Nenhuma resposta recebida após 2 minutos")
+                        client.loop_stop()
+                        client.disconnect()
+                except Exception as e:
+                    logger.error(f"Erro ao publicar mensagem: {str(e)}")
+                    client.loop_stop()
+                    client.disconnect()
+        
+        if tentativa < MAX_TENTATIVAS - 1:
+            logger.info(f"Aguardando 2 segundos antes da próxima tentativa...")
+            time.sleep(2)
+    
+    logger.error("Todas as tentativas de conexão falharam")
 
 if __name__ == "__main__":
     import threading
