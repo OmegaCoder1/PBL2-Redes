@@ -33,10 +33,11 @@ UNIDADES_POR_PORCENTAGEM = 10  # Unidades que o carro pode percorrer por 1% de b
 TEMPO_BATERIA_TOTAL = 3 * 60 * 60  # 3 horas em segundos
 
 # Ranges de geração de postos para esta central
-X_MIN = -1000
-X_MAX = 0
-Y_MIN = -1000
-Y_MAX = 0
+X_MIN = 1000
+X_MAX = 3000
+Y_MIN = 1000
+Y_MAX = 3000
+ESPACAMENTO_MINIMO = 100  # Espaçamento mínimo entre postos
 
 # Dicionário global para armazenar os postos desta central
 postos_central = {}
@@ -222,19 +223,63 @@ def gerar_codigo_aleatorio(tamanho=6):
     caracteres = string.ascii_letters + string.digits
     return ''.join(random.choice(caracteres) for _ in range(tamanho))
 
-def inicializar_postos_ficticios(num_postos=5000):
-    """Inicializa o dicionário com postos fictícios."""
+def gerar_coordenadas_sequenciais(num_postos):
+    """Gera coordenadas para os postos com distribuição mais uniforme."""
+    coordenadas = []
+    
+    # Calcula o número de linhas e colunas para uma distribuição mais uniforme
+    num_linhas = int(math.sqrt(num_postos))
+    num_colunas = int(num_postos / num_linhas)
+    
+    # Calcula o espaçamento entre postos em cada eixo
+    espaco_x = (X_MAX - X_MIN) / (num_colunas + 1)
+    espaco_y = (Y_MAX - Y_MIN) / (num_linhas + 1)
+    
+    # Gera coordenadas em uma grade mais uniforme
+    for i in range(num_linhas):
+        for j in range(num_colunas):
+            # Adiciona uma pequena variação aleatória para evitar alinhamento perfeito
+            variacao_x = random.uniform(-espaco_x * 0.2, espaco_x * 0.2)
+            variacao_y = random.uniform(-espaco_y * 0.2, espaco_y * 0.2)
+            
+            x = X_MIN + (j + 1) * espaco_x + variacao_x
+            y = Y_MIN + (i + 1) * espaco_y + variacao_y
+            
+            # Garante que as coordenadas estão dentro dos limites
+            x = max(X_MIN, min(X_MAX, x))
+            y = max(Y_MIN, min(Y_MAX, y))
+            
+            coordenadas.append((x, y))
+    
+    # Se ainda faltarem postos, adiciona aleatoriamente
+    while len(coordenadas) < num_postos:
+        x = random.uniform(X_MIN, X_MAX)
+        y = random.uniform(Y_MIN, Y_MAX)
+        
+        # Verifica se o novo posto está longe o suficiente dos existentes
+        muito_proximo = False
+        for cx, cy in coordenadas:
+            if calcular_distancia(x, y, cx, cy) < ESPACAMENTO_MINIMO:
+                muito_proximo = True
+                break
+        
+        if not muito_proximo:
+            coordenadas.append((x, y))
+    
+    return coordenadas
+
+def inicializar_postos_ficticios(num_postos=500):
+    """Inicializa o dicionário com postos fictícios distribuídos sequencialmente."""
     global postos_central
     
     # Limpa o dicionário se já existir
     postos_central = {}
     
-    # Gera postos fictícios
-    for i in range(num_postos):
-        # Gera coordenadas aleatórias dentro do range definido
-        x = round(random.uniform(X_MIN, X_MAX), 2)
-        y = round(random.uniform(Y_MIN, Y_MAX), 2)
-        
+    # Gera coordenadas sequenciais
+    coordenadas = gerar_coordenadas_sequenciais(num_postos)
+    
+    # Cria os postos com as coordenadas geradas
+    for i, (x, y) in enumerate(coordenadas):
         # Gera nome do posto
         timestamp = int(time.time())
         random_code = gerar_codigo_aleatorio()
@@ -242,11 +287,11 @@ def inicializar_postos_ficticios(num_postos=5000):
         
         # Adiciona o posto ao dicionário
         postos_central[nome_posto] = {
-            "x": x,
-            "y": y,
+            "x": round(x, 2),
+            "y": round(y, 2),
             "ocupado": False,
             "id": None,
-            "reservas": []  # Lista de reservas com horários
+            "reservas": []
         }
         
         logger.info(f"""
@@ -258,8 +303,11 @@ def inicializar_postos_ficticios(num_postos=5000):
         """)
     
     logger.info(f"""
-    ===== Postos da Central 1 =====
+    ===== Postos da Central 3 =====
     Total de postos: {len(postos_central)}
+    Range X: {X_MIN} a {X_MAX}
+    Range Y: {Y_MIN} a {Y_MAX}
+    Espaçamento mínimo: {ESPACAMENTO_MINIMO}
     Postos disponíveis:
     {json.dumps(postos_central, indent=2)}
     ===========================
@@ -751,7 +799,20 @@ def on_message(client, userdata, msg):
                 "timestamp": time.time()
             }
             
-            client.publish("Resposta/Reserva", json.dumps(resposta))
+            logger.info(f"""
+            ===== Tentando Publicar Resposta =====
+            Broker: localhost:1885
+            Tópico: Resposta/Reserva
+            Resposta: {json.dumps(resposta, indent=2)}
+            ===================================
+            """)
+            
+            try:
+                client.publish("Resposta/Reserva", json.dumps(resposta))
+                logger.info("Mensagem publicada com sucesso")
+            except Exception as e:
+                logger.error(f"Erro ao publicar mensagem: {e}")
+            
             logger.info(f"Resposta publicada: {resposta}")
             
         except json.JSONDecodeError:
