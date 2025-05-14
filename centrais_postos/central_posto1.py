@@ -7,6 +7,7 @@ import random
 import string
 import math
 import threading
+import os
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 from threading import Lock, Condition
@@ -19,6 +20,15 @@ logger = logging.getLogger(__name__)
 # Configuração do Flask
 app = Flask(__name__)
 CORS(app)  # Habilita CORS para todas as rotas
+
+# Configuração do MQTT
+MQTT_BROKER = os.getenv('MQTT_BROKER')
+MQTT_PORT = int(os.getenv('MQTT_PORT'))
+
+# CONFIGURACAO DAS URL LIGADAS AOS CONTAINERS EXATOS
+CENTRAL1_URL = os.getenv('CENTRAL1_URL', 'http://central1:5000')
+CENTRAL2_URL = os.getenv('CENTRAL2_URL', 'http://central2:5001')
+CENTRAL3_URL = os.getenv('CENTRAL3_URL', 'http://central3:5002')
 
 # Locks para controle de concorrência
 lock = Lock()  # Lock principal
@@ -365,11 +375,25 @@ def reservar_posto():
                 }), 404
                 
             # Verifica se o posto está disponível no horário solicitado
+            horario_solicitado = datetime.strptime(horario_reserva, "%Y-%m-%d %H:%M:%S")
+            
             for reserva in postos_central[nome_posto]["reservas"]:
-                if reserva["horario"] == horario_reserva:
+                horario_reserva_existente = datetime.strptime(reserva["horario"], "%Y-%m-%d %H:%M:%S")
+                
+                # Calcula o intervalo de tempo (10 minutos antes e depois)
+                intervalo_minutos = 10
+                inicio_intervalo = horario_reserva_existente - timedelta(minutes=intervalo_minutos)
+                fim_intervalo = horario_reserva_existente + timedelta(minutes=intervalo_minutos)
+                
+                # Verifica se o horário solicitado está dentro do intervalo
+                if inicio_intervalo <= horario_solicitado <= fim_intervalo:
                     return jsonify({
                         "status": "erro",
-                        "mensagem": f"Posto {nome_posto} já está reservado para o horário {horario_reserva}"
+                        "mensagem": f"Posto {nome_posto} já está reservado no horário {reserva['horario']}. " +
+                                  f"O posto está indisponível no intervalo de {inicio_intervalo.strftime('%H:%M')} " +
+                                  f"até {fim_intervalo.strftime('%H:%M')}. " +
+                                  f"Você está tentando reservar para {horario_solicitado.strftime('%H:%M')}, " +
+                                  f"que está dentro deste intervalo."
                     }), 409
                 
             # Adiciona a reserva
@@ -580,7 +604,7 @@ def on_message(client, userdata, msg):
             # Faz requisições para os outros servidores
             try:
                 # Requisição para o servidor 1
-                response1 = requests.get("http://localhost:5001/postos", timeout=15)
+                response1 = requests.get(f"{CENTRAL2_URL}/postos", timeout=15)
                 if response1.status_code == 200:
                     postos_servidor1 = response1.json()
                     todos_postos.update(postos_servidor1)
@@ -593,7 +617,7 @@ def on_message(client, userdata, msg):
                     """)
                     
                 # Requisição para o servidor 2
-                response2 = requests.get("http://localhost:5002/postos", timeout=15)
+                response2 = requests.get(f"{CENTRAL3_URL}/postos", timeout=15)
                 if response2.status_code == 200:
                     postos_servidor2 = response2.json()
                     todos_postos.update(postos_servidor2)
@@ -712,11 +736,11 @@ def on_message(client, userdata, msg):
                 try:
                     # Determina qual servidor possui o posto
                     if nome_posto.startswith("Posto_Central1"):
-                        url = f"http://localhost:5000/reservar"
+                        url = f"{CENTRAL1_URL}/reservar"
                     elif nome_posto.startswith("Posto_Central2"):
-                        url = f"http://localhost:5001/reservar"
+                        url = f"{CENTRAL2_URL}/reservar"
                     else:
-                        url = f"http://localhost:5002/reservar"
+                        url = f"{CENTRAL3_URL}/reservar"
                     
                     # Obtém o horário de chegada deste posto
                     horario_chegada = detalhes_rota[i]["horario_chegada"]
@@ -737,11 +761,11 @@ def on_message(client, userdata, msg):
                             try:
                                 nome_posto_anterior = postos_reservados[j]
                                 if nome_posto_anterior.startswith("Posto_Central1"):
-                                    url = f"http://localhost:5000/cancelar"
+                                    url = f"{CENTRAL1_URL}/cancelar"
                                 elif nome_posto_anterior.startswith("Posto_Central2"):
-                                    url = f"http://localhost:5001/cancelar"
+                                    url = f"{CENTRAL2_URL}/cancelar"
                                 else:
-                                    url = f"http://localhost:5002/cancelar"
+                                    url = f"{CENTRAL3_URL}/cancelar"
                                 
                                 requests.post(url, json={
                                     "nome_posto": nome_posto_anterior,
@@ -755,7 +779,7 @@ def on_message(client, userdata, msg):
                             "cliente_id": dados.get('cliente_id'),
                             "postos_reservados": [],
                             "status": "erro",
-                            "mensagem": f"Falha ao reservar posto {nome_posto}",
+                            "mensagem": f"Falha ao reservar posto {nome_posto}, motivo: {response.text} status: {response.status_code}",
                             "timestamp": time.time()
                         }
                         client.publish("Resposta/Reserva", json.dumps(resposta))
@@ -768,11 +792,11 @@ def on_message(client, userdata, msg):
                         try:
                             nome_posto_anterior = postos_reservados[j]
                             if nome_posto_anterior.startswith("Posto_Central1"):
-                                url = f"http://localhost:5000/cancelar"
+                                url = f"{CENTRAL1_URL}/cancelar"
                             elif nome_posto_anterior.startswith("Posto_Central2"):
-                                url = f"http://localhost:5001/cancelar"
+                                url = f"{CENTRAL2_URL}/cancelar"
                             else:
-                                url = f"http://localhost:5002/cancelar"
+                                url = f"{CENTRAL3_URL}/cancelar"
                             
                             requests.post(url, json={
                                 "nome_posto": nome_posto_anterior,
@@ -844,19 +868,19 @@ inicializar_postos_ficticios()
 if __name__ == "__main__":
     try:
         # Conectando ao broker local
-        logger.info("Conectando ao broker MQTT local...")
-        client.connect("localhost", 1886, 60)  # Usando a porta 1883
+        logger.info(f"Conectando ao broker MQTT {MQTT_BROKER}:{MQTT_PORT}...")
+        client.connect(MQTT_BROKER, MQTT_PORT, 60)
         
         # Iniciando o loop de eventos MQTT em uma thread separada
         client.loop_start()
         
         # Iniciando o servidor Flask
-        logger.info("""
+        logger.info(f"""
         ============================================
         Servidor Central 1 Iniciado
         Flask rodando na porta 5000
         MQTT escutando no tópico: Solicitar/Reserva
-        Broker: localhost:1886
+        Broker: {MQTT_BROKER}:{MQTT_PORT}
         ============================================
         """)
         app.run(host='0.0.0.0', port=5000)

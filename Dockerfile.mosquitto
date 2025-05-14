@@ -1,0 +1,9 @@
+FROM eclipse-mosquitto:latest
+
+# Portas MQTT
+EXPOSE 1884 1885 1886
+# Portas WebSocket
+EXPOSE 9001 9002 9003
+
+# O comando será sobrescrito pelo docker-compose para cada container
+CMD ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf"] 

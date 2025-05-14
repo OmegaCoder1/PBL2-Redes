@@ -1,0 +1,116 @@
+version: '3'
+
+services:
+  mosquitto1:
+    build:
+      context: .
+      dockerfile: Dockerfile.mosquitto
+    ports:
+      - "1886:1886"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto_config/mosquitto_posto1.conf:/mosquitto/config/mosquitto.conf
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+
+  mosquitto2:
+    build:
+      context: .
+      dockerfile: Dockerfile.mosquitto
+    ports:
+      - "1885:1885"
+      - "9002:9002"
+    volumes:
+      - ./mosquitto_config/mosquitto_posto2.conf:/mosquitto/config/mosquitto.conf
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+
+  mosquitto3:
+    build:
+      context: .
+      dockerfile: Dockerfile.mosquitto
+    ports:
+      - "1884:1884"
+      - "9003:9003"
+    volumes:
+      - ./mosquitto_config/mosquitto_posto3.conf:/mosquitto/config/mosquitto.conf
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+
+  central1:
+    build:
+      context: .
+      dockerfile: Dockerfile.central
+    ports:
+      - "5000:5000"
+    environment:
+      - POSTO_ID=1
+      - MQTT_BROKER=mosquitto1
+      - MQTT_PORT=1886
+      - CENTRAL1_URL=http://central1:5000
+      - CENTRAL2_URL=http://central2:5001
+      - CENTRAL3_URL=http://central3:5002
+    command: python centrais_postos/central_posto1.py
+    depends_on:
+      - mosquitto1
+
+  central2:
+    build:
+      context: .
+      dockerfile: Dockerfile.central
+    ports:
+      - "5001:5001"
+    environment:
+      - POSTO_ID=2
+      - MQTT_BROKER=mosquitto2
+      - MQTT_PORT=1884
+      - CENTRAL1_URL=http://central1:5000
+      - CENTRAL2_URL=http://central2:5001
+      - CENTRAL3_URL=http://central3:5002
+    command: python centrais_postos/central_posto2.py
+    depends_on:
+      - mosquitto2
+
+  central3:
+    build:
+      context: .
+      dockerfile: Dockerfile.central
+    ports:
+      - "5002:5002"
+    environment:
+      - POSTO_ID=3
+      - MQTT_BROKER=mosquitto3
+      - MQTT_PORT=1885
+      - CENTRAL1_URL=http://central1:5000
+      - CENTRAL2_URL=http://central2:5001
+      - CENTRAL3_URL=http://central3:5002
+    command: python centrais_postos/central_posto3.py
+    depends_on:
+      - mosquitto3
+
+  teste_multiplos_clientes:
+    build:
+      context: .
+      dockerfile: Dockerfile.central
+    volumes:
+      - .:/app
+    command: python teste_multiplos_clientes_docker.py
+    depends_on:
+      - mosquitto1
+      - mosquitto2
+      - mosquitto3
+      - central1
+      - central2
+      - central3
+
+  teste_multiplos_clientes_diferentes:
+    build:
+      context: .
+      dockerfile: Dockerfile.central
+    volumes:
+      - .:/app
+    command: python teste_multiplos_clientes_concorrentes_ORIGENS_EFINAL_DIFERENTES_docker.py
+    depends_on:
+      - mosquitto1
+      - mosquitto2
+      - mosquitto3
+      - central1
+      - central2
+      - central3 
