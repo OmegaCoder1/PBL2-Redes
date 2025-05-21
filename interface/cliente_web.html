@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Reserva de Postos</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .btn-reservar {
+            background: #4CAF50;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+        }
+        .btn-reservar:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        .cliente-info {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+        .status-box {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <h2 class="text-center mb-4">Sistema de Reserva de Postos</h2>
+                    
+                    <div class="cliente-info">
+                        <p><strong>ID do Cliente:</strong> <span id="clienteId">-</span></p>
+                        <p><strong>Nome:</strong> <span id="clienteNome">-</span></p>
+                        <p><strong>Data:</strong> <span id="dataAtual">-</span></p>
+                    </div>
+
+                    <div class="text-center">
+                        <button class="btn btn-reservar" onclick="reservarPosto()">
+                            Reservar Posto
+                        </button>
+                    </div>
+
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>Processando reserva...</p>
+                    </div>
+
+                    <div class="status-box" id="statusBox">
+                        <h4>Status da Reserva</h4>
+                        <p id="statusMessage"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Importando a biblioteca MQTT corretamente -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        // Lista de nomes para sorteio
+        const nomes = [
+            "João Silva", "Maria Santos", "Pedro Oliveira", 
+            "Ana Costa", "Lucas Ferreira", "Julia Lima",
+            "Carlos Souza", "Mariana Pereira", "Rafael Almeida"
+        ];
+
+        // Função para gerar ID aleatório
+        function gerarId() {
+            return Math.random().toString(36).substr(2, 9);
+        }
+
+        // Função para obter data atual formatada
+        function getDataAtual() {
+            const data = new Date();
+            return data.toLocaleDateString('pt-BR');
+        }
+
+        // Função para atualizar informações do cliente
+        function atualizarInfoCliente() {
+            document.getElementById('clienteId').textContent = gerarId();
+            document.getElementById('clienteNome').textContent = nomes[Math.floor(Math.random() * nomes.length)];
+            document.getElementById('dataAtual').textContent = getDataAtual();
+        }
+
+        // Função para reservar posto
+        function reservarPosto() {
+            const loading = document.querySelector('.loading');
+            const statusBox = document.getElementById('statusBox');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            loading.style.display = 'block';
+            statusBox.style.display = 'none';
+
+            // Dados da reserva
+            const dados = {
+                cliente_id: document.getElementById('clienteId').textContent,
+                data: document.getElementById('dataAtual').textContent,
+                servico: "Consulta",
+                timestamp: Date.now()
+            };
+
+            // Conectar ao broker MQTT usando WebSocket
+            const client = mqtt.connect('ws://localhost:9003');
+
+            client.on('connect', () => {
+                console.log('Conectado ao broker MQTT');
+                
+                // Publicar mensagem
+                client.publish('Solicitar/Reserva', JSON.stringify(dados), (err) => {
+                    if (err) {
+                        console.error('Erro ao publicar:', err);
+                        statusMessage.textContent = 'Erro ao fazer reserva. Tente novamente.';
+                    } else {
+                        statusMessage.textContent = 'Reserva solicitada com sucesso!';
+                    }
+                    
+                    loading.style.display = 'none';
+                    statusBox.style.display = 'block';
+                    
+                    // Desconectar após 2 segundos
+                    setTimeout(() => {
+                        client.end();
+                    }, 2000);
+                });
+            });
+
+            client.on('error', (err) => {
+                console.error('Erro na conexão:', err);
+                statusMessage.textContent = 'Erro na conexão. Tente novamente.';
+                loading.style.display = 'none';
+                statusBox.style.display = 'block';
+            });
+        }
+
+        // Atualizar informações ao carregar a página
+        window.onload = atualizarInfoCliente;
+    </script>
+</body>
+</html> 

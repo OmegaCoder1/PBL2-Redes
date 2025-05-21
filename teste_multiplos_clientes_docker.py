@@ -1,0 +1,206 @@
+import paho.mqtt.client as mqtt
+import json
+import time
+import random
+import logging
+import threading
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+import math
+import os
+
+# Configuração do logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Lista de brokers disponíveis (usando nomes dos serviços do Docker)
+BROKERS = [
+    {"name": "mosquitto1", "port": 1886},
+    {"name": "mosquitto2", "port": 1885},
+    {"name": "mosquitto3", "port": 1884}
+]
+MAX_TENTATIVAS = 3
+
+# Dicionário para armazenar as respostas de cada cliente
+respostas = {}
+respostas_lock = threading.Lock()
+
+def calcular_distancia(ponto1, ponto2):
+    """Calcula a distância euclidiana entre dois pontos."""
+    return math.sqrt((ponto2['x'] - ponto1['x'])**2 + (ponto2['y'] - ponto1['y'])**2)
+
+def gerar_coordenadas():
+    """Gera coordenadas aleatórias dentro dos ranges especificados."""
+    x = random.randint(-3000, 3000)
+    y = random.randint(-3000, 3000)
+    return {"x": x, "y": y}
+
+def on_connect(client, userdata, flags, rc, properties=None):
+    """Callback quando conecta ao broker."""
+    if rc == 0:
+        logger.info(f"Cliente {client._client_id} conectado ao broker MQTT {client._broker_name} na porta {client._port}")
+        client.subscribe("Resposta/Reserva")
+        logger.info(f"Cliente {client._client_id} inscrito no tópico: Resposta/Reserva no broker {client._broker_name}")
+    else:
+        logger.error(f"Cliente {client._client_id} falha na conexão ao broker {client._broker_name}, código de retorno: {rc}")
+
+def on_message(client, userdata, msg):
+    """Callback quando recebe uma mensagem."""
+    try:
+        # Verifica se o payload é bytes ou string
+        if isinstance(msg.payload, bytes):
+            dados = json.loads(msg.payload.decode())
+        else:
+            dados = json.loads(msg.payload)
+            
+        logger.info(f"Cliente {client._client_id} recebeu mensagem do broker {client._broker_name}")
+        logger.info(f"Conteúdo da mensagem: {json.dumps(dados, indent=2)}")
+        
+        # Verifica se a resposta é para este cliente
+        if dados.get('cliente_id') == client._client_id:
+            with respostas_lock:
+                respostas[client._client_id] = dados
+                logger.info(f"Cliente {client._client_id} recebeu resposta: {dados['status']}")
+    except json.JSONDecodeError:
+        logger.error(f"Cliente {client._client_id} erro ao decodificar mensagem JSON")
+    except Exception as e:
+        logger.error(f"Cliente {client._client_id} erro ao processar mensagem: {e}")
+
+def tentar_conexao(broker, client_id):
+    """Tenta conectar ao broker MQTT especificado."""
+    try:
+        # Usar a versão 3.1.1 do protocolo MQTT
+        client = mqtt.Client(protocol=mqtt.MQTTv311)
+        client._port = broker["port"]
+        client._broker_name = broker["name"]
+        client._client_id = client_id
+        
+        # Configura os callbacks
+        client.on_connect = on_connect
+        client.on_message = on_message
+        
+        # Conecta ao broker usando o nome do serviço do Docker
+        client.connect(broker["name"], broker["port"], 60)
+        client.loop_start()
+        return client
+    except Exception as e:
+        logger.error(f"Cliente {client_id} erro ao conectar no broker {broker['name']}: {str(e)}")
+        return None
+
+def executar_cliente(client_id, bateria, origem, destino):
+    """Executa um cliente individual com origem, destino e bateria pré-definidos."""
+    # Escolhe um broker aleatório para este cliente
+    broker = random.choice(BROKERS)
+    
+    # Usa as coordenadas fornecidas
+    dados = {
+        "cliente_id": client_id,
+        "origem": origem,
+        "destino": destino,
+        "bateria_atual": bateria
+    }
+    
+    logger.info(f"Cliente {client_id} - Dados:")
+    logger.info(f"Origem: ({origem['x']}, {origem['y']})")
+    logger.info(f"Destino: ({destino['x']}, {destino['y']})")
+    logger.info(f"Bateria atual: {dados['bateria_atual']}%")
+    logger.info(f"Cliente {client_id} escolheu o broker {broker['name']} na porta {broker['port']}")
+    
+    # Tenta conectar no broker escolhido
+    for tentativa in range(MAX_TENTATIVAS):
+        logger.info(f"Cliente {client_id} - Tentativa {tentativa + 1}: Tentando conectar no broker {broker['name']} na porta {broker['port']}")
+        client = tentar_conexao(broker, client_id)
+        
+        if client:
+            try:
+                # Publica a mensagem
+                client.publish("Solicitar/Reserva", json.dumps(dados))
+                logger.info(f"Cliente {client_id} publicou mensagem para o tópico Solicitar/Reserva no broker {broker['name']}")
+                
+                # Aguarda a resposta por 2 minutos
+                inicio = time.time()
+                while time.time() - inicio < 120:
+                    with respostas_lock:
+                        if client_id in respostas:
+                            resposta = respostas[client_id]
+                            print(f"\nResposta para Cliente {client_id}:")
+                            print(formatar_resposta(resposta))
+                            client.loop_stop()
+                            client.disconnect()
+                            return
+                    time.sleep(0.1)
+                
+                logger.warning(f"Cliente {client_id} timeout: Nenhuma resposta recebida após 2 minutos")
+                client.loop_stop()
+                client.disconnect()
+            except Exception as e:
+                logger.error(f"Cliente {client_id} erro ao publicar mensagem: {str(e)}")
+                client.loop_stop()
+                client.disconnect()
+        
+        if tentativa < MAX_TENTATIVAS - 1:
+            logger.info(f"Cliente {client_id} aguardando 2 segundos antes da próxima tentativa...")
+            time.sleep(2)
+    
+    logger.error(f"Cliente {client_id} todas as tentativas de conexão falharam")
+
+def formatar_resposta(dados):
+    """Formata a resposta para exibição no terminal."""
+    if not dados or dados.get('status') != 'sucesso':
+        return f"Erro ao processar a requisição: {dados.get('mensagem', 'Erro desconhecido')}"
+    
+    resultado = []
+    resultado.append("\n=== ROTA CALCULADA ===")
+    resultado.append(f"Status: {dados['status']}")
+    resultado.append(f"Mensagem: {dados['mensagem']}")
+    resultado.append("\nPostos Reservados:")
+    
+    for i, posto in enumerate(dados['detalhes_rota'], 1):
+        if posto['tipo'] == 'posto':
+            resultado.append(f"\n{i}. Posto: {posto['nome']}")
+            resultado.append(f"   Coordenadas: ({posto['x']}, {posto['y']})")
+            resultado.append(f"   Bateria na chegada: {posto['bateria_chegada']}%")
+            resultado.append(f"   Horário de chegada: {posto['horario_chegada']}")
+    
+    # Exibe informações do destino final
+    destino = dados['detalhes_rota'][-1]
+    resultado.append(f"\nDestino Final:")
+    resultado.append(f"Coordenadas: ({destino['x']}, {destino['y']})")
+    resultado.append(f"Bateria restante: {destino['bateria_restante']:.2f}%")
+    resultado.append(f"Horário de chegada: {destino['horario_chegada']}")
+    resultado.append("\n=====================")
+    
+    return "\n".join(resultado)
+
+def main():
+    # Número de usuários a serem simulados
+    num_usuarios = int(input("Digite o número de usuários a serem simulados: "))
+    
+    # Gera coordenadas aleatórias para origem e destino
+    origem = gerar_coordenadas()
+    destino = gerar_coordenadas()
+    
+    # Garante que origem e destino sejam diferentes
+    while origem == destino:
+        destino = gerar_coordenadas()
+    
+    print(f"\nCoordenadas para todos os usuários:")
+    print(f"Origem: ({origem['x']}, {origem['y']})")
+    print(f"Destino: ({destino['x']}, {destino['y']})")
+    
+    # Lista para armazenar as threads
+    threads = []
+    
+    # Cria e inicia as threads para cada usuário
+    with ThreadPoolExecutor(max_workers=num_usuarios) as executor:
+        for i in range(num_usuarios):
+            # Gera um ID único para cada usuário
+            cliente_id = f"cliente_{i+1}"
+            # Gera um nível de bateria aleatório entre 20 e 100
+            bateria = random.randint(20, 100)
+            
+            # Inicia a thread para este usuário
+            executor.submit(executar_cliente, cliente_id, bateria, origem, destino)
+
+if __name__ == "__main__":
+    main() 

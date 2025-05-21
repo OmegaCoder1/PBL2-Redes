@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Posto 1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #3b82f6;
+            --success-color: #22c55e;
+            --danger-color: #ef4444;
+            --background-dark: #0f172a;
+            --card-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--background-dark);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .status-online {
+            background: var(--success-color);
+            box-shadow: 0 0 10px var(--success-color);
+        }
+
+        .status-offline {
+            background: var(--danger-color);
+            box-shadow: 0 0 10px var(--danger-color);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(37, 99, 235, 0.3);
+        }
+
+        .postos-container {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .postos-container h2 {
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .posto-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .posto-card:hover {
+            transform: translateX(5px);
+            border-color: var(--primary-color);
+        }
+
+        .posto-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .posto-nome {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+        }
+
+        .posto-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .posto-status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status-disponivel {
+            background: var(--success-color);
+            box-shadow: 0 0 8px var(--success-color);
+        }
+
+        .status-ocupado {
+            background: var(--danger-color);
+            box-shadow: 0 0 8px var(--danger-color);
+        }
+
+        .posto-info {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .posto-coordenadas {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+        }
+
+        .posto-reservas {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .reserva-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .message-container, .response-container {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        .message-container h3, .response-container h3 {
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .message, .response {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 4px solid var(--primary-color);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border-radius: 0.75rem;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .message:hover, .response:hover {
+            transform: translateX(5px);
+            border-color: var(--primary-color);
+        }
+
+        .message-header, .response-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .message-content, .response-content {
+            white-space: pre-wrap;
+            font-family: 'Inter', monospace;
+            position: relative;
+            z-index: 1;
+            color: var(--text-primary);
+            line-height: 1.8;
+        }
+
+        .clear-btn {
+            background: var(--danger-color);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .clear-btn:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        .letter-popup {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            border-radius: 1rem;
+            padding: 1rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            transform: scale(0.5) rotate(-10deg);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .letter-popup.show {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
+        }
+
+        .letter-icon {
+            font-size: 2rem;
+            color: white;
+            animation: letterAnimation 0.5s ease;
+        }
+
+        @keyframes letterAnimation {
+            0% { transform: scale(0.5) rotate(-30deg); }
+            50% { transform: scale(1.2) rotate(10deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--background-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+
+        /* Animações */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .stat-value {
+                font-size: 2rem;
+            }
+        }
+
+        /* Estilos do Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--danger-color);
+            transform: rotate(90deg);
+        }
+
+        .modal-content {
+            color: var(--text-primary);
+        }
+
+        .rota-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .rota-item:hover {
+            border-color: var(--primary-color);
+        }
+
+        .rota-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .rota-details {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .rota-details p {
+            margin: 0.5rem 0;
+        }
+
+        .message {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .message:hover {
+            transform: translateX(5px);
+            border-color: var(--primary-color);
+        }
+
+        /* Estilos para o histórico de reservas */
+        .historico-container {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .historico-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .historico-title {
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .historico-stats {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .historico-stat {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+        }
+
+        .historico-success {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success-color);
+            border: 1px solid var(--success-color);
+        }
+
+        .historico-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+            border: 1px solid var(--danger-color);
+        }
+
+        .historico-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .historico-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .historico-item:hover {
+            transform: translateX(5px);
+            border-color: var(--primary-color);
+        }
+
+        .historico-item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .historico-item-status {
+            font-weight: 500;
+        }
+
+        .historico-item-status.success {
+            color: var(--success-color);
+        }
+
+        .historico-item-status.error {
+            color: var(--danger-color);
+        }
+
+        .historico-item-details {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .historico-item-time {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <span class="status-indicator" id="statusIndicator"></span>
+                Monitor do Posto 1
+            </h1>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Mensagens Recebidas</h3>
+                <div class="stat-value" id="messageCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Última Atividade</h3>
+                <div class="stat-value" id="lastActivity">-</div>
+            </div>
+        </div>
+
+        <!-- Seção de Postos -->
+        <div class="postos-container">
+            <h2>Postos Disponíveis</h2>
+            <div id="lista-postos">
+                <!-- Os postos serão inseridos aqui via JavaScript -->
+            </div>
+        </div>
+
+        <!-- Seção de Mensagens -->
+        <div class="message-container" id="messageContainer">
+            <h3>Solicitações de Reserva</h3>
+            <!-- As mensagens serão inseridas aqui -->
+        </div>
+
+        <!-- Nova seção de Respostas -->
+        <div class="response-container" id="responseContainer">
+            <h3>Respostas de Reserva</h3>
+            <!-- As respostas serão inseridas aqui -->
+        </div>
+
+        <!-- Nova seção de histórico de reservas -->
+        <div class="historico-container">
+            <div class="historico-header">
+                <h3 class="historico-title">Histórico de Reservas</h3>
+                <div class="historico-stats">
+                    <div class="historico-stat historico-success">
+                        Sucessos: <span id="successCount">0</span>
+                    </div>
+                    <div class="historico-stat historico-error">
+                        Erros: <span id="errorCount">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="historico-list" id="historicoList">
+                <!-- Os itens do histórico serão inseridos aqui via JavaScript -->
+            </div>
+        </div>
+
+        <button class="clear-btn" onclick="clearMessages()">Limpar Mensagens</button>
+    </div>
+
+    <!-- Pop-up da carta -->
+    <div class="letter-popup" id="letterPopup">
+        <div class="letter-icon">✉</div>
+        <div class="letter-content">
+            Nova mensagem recebida!
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="responseModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Detalhes da Reserva</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-content" id="modalContent">
+                <!-- Conteúdo será preenchido via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        let messageCount = 0;
+        const messageContainer = document.getElementById('messageContainer');
+        const responseContainer = document.getElementById('responseContainer');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const messageCountElement = document.getElementById('messageCount');
+        const lastActivityElement = document.getElementById('lastActivity');
+
+        // Função para criar o card de um posto
+        function criarCardPosto(posto) {
+            const statusClass = posto.ocupado ? 'status-ocupado' : 'status-disponivel';
+            const statusText = posto.ocupado ? 'Ocupado' : 'Disponível';
+            
+            let reservasHTML = '';
+            if (posto.reservas && posto.reservas.length > 0) {
+                reservasHTML = `
+                    <div class="posto-reservas">
+                        <h6>Reservas:</h6>
+                        ${posto.reservas.map(reserva => `
+                            <div class="reserva-item">
+                                <strong>Cliente:</strong> ${reserva.cliente_id}<br>
+                                <strong>Horário:</strong> ${reserva.horario}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="posto-card">
+                    <div class="posto-header">
+                        <span class="posto-nome">${posto.nome}</span>
+                        <span class="posto-status">
+                            <span class="posto-status-indicator ${statusClass}"></span>
+                            ${statusText}
+                        </span>
+                    </div>
+                    <div class="posto-info">
+                        <div class="posto-coordenadas">
+                            <strong>Coordenadas:</strong> X: ${posto.x}, Y: ${posto.y}
+                        </div>
+                        ${reservasHTML}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Função para atualizar a lista de postos
+        function atualizarListaPostos() {
+            fetch('http://localhost:5000/postos', {
+                mode: 'cors',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(postos => {
+                const container = document.getElementById('lista-postos');
+                container.innerHTML = '';
+                
+                if (Object.keys(postos).length === 0) {
+                    container.innerHTML = '<div class="posto-card">Nenhum posto disponível no momento.</div>';
+                    return;
+                }
+                
+                Object.entries(postos).forEach(([nome, dados]) => {
+                    const posto = { nome, ...dados };
+                    container.innerHTML += criarCardPosto(posto);
+                });
+            })
+            .catch(error => {
+                console.error('Erro ao buscar postos:', error);
+                const container = document.getElementById('lista-postos');
+                container.innerHTML = '<div class="posto-card">Erro ao carregar postos. Tentando novamente...</div>';
+            });
+        }
+
+        // Atualizar a lista de postos a cada 5 segundos
+        setInterval(atualizarListaPostos, 5000);
+        atualizarListaPostos(); // Primeira atualização
+
+        // Conectar ao broker MQTT usando WebSocket
+        const client = mqtt.connect('ws://localhost:9001');
+
+        client.on('connect', () => {
+            console.log('Conectado ao broker MQTT');
+            statusIndicator.className = 'status-indicator status-online';
+            
+            // Inscrever nos tópicos
+            client.subscribe('Solicitar/Reserva', (err) => {
+                if (err) {
+                    console.error('Erro ao inscrever em Solicitar/Reserva:', err);
+                }
+            });
+            
+            client.subscribe('Resposta/Reserva', (err) => {
+                if (err) {
+                    console.error('Erro ao inscrever em Resposta/Reserva:', err);
+                }
+            });
+        });
+
+        // Função para mostrar o pop-up da carta
+        function showLetterPopup() {
+            const popup = document.getElementById('letterPopup');
+            popup.classList.add('show');
+            
+            // Remove o pop-up após 2 segundos
+            setTimeout(() => {
+                popup.classList.remove('show');
+            }, 2000);
+        }
+
+        // Objeto para armazenar as respostas
+        let respostasArmazenadas = {};
+
+        // Variáveis para contagem de sucessos e erros
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Função para atualizar o histórico
+        function atualizarHistorico(resposta) {
+            const historicoList = document.getElementById('historicoList');
+            const item = document.createElement('div');
+            item.className = 'historico-item';
+            
+            const status = resposta.status === 'sucesso' ? 'success' : 'error';
+            if (status === 'success') {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+            
+            // Atualiza os contadores
+            document.getElementById('successCount').textContent = successCount;
+            document.getElementById('errorCount').textContent = errorCount;
+
+            const timestamp = new Date().toLocaleString();
+            
+            item.innerHTML = `
+                <div class="historico-item-header">
+                    <span class="historico-item-status ${status}">
+                        ${status === 'success' ? '✓ Sucesso' : '✗ Erro'}
+                    </span>
+                    <span class="historico-item-time">${timestamp}</span>
+                </div>
+                <div class="historico-item-details">
+                    <p>Cliente ID: ${resposta.cliente_id}</p>
+                    <p>Mensagem: ${resposta.mensagem}</p>
+                    ${resposta.postos_reservados ? 
+                        `<p>Postos Reservados: ${resposta.postos_reservados.length}</p>` : ''}
+                </div>
+            `;
+            
+            // Insere no início da lista
+            historicoList.insertBefore(item, historicoList.firstChild);
+        }
+
+        // Modificar a função que processa as mensagens
+        client.on('message', (topic, message) => {
+            console.log(`Mensagem recebida no tópico: ${topic}`);
+            console.log('Conteúdo da mensagem:', message.toString());
+            
+            messageCount++;
+            messageCountElement.textContent = messageCount;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            lastActivityElement.textContent = timestamp;
+
+            showLetterPopup();
+
+            try {
+                const dados = JSON.parse(message.toString());
+                console.log('Dados processados:', dados);
+                
+                if (topic === 'Resposta/Reserva') {
+                    console.log('Armazenando resposta para cliente:', dados.cliente_id);
+                    respostasArmazenadas[dados.cliente_id] = dados;
+                    
+                    // Atualiza o histórico
+                    atualizarHistorico(dados);
+                    
+                    // Adiciona a resposta na seção de respostas
+                    const container = responseContainer;
+                    const responseElement = document.createElement('div');
+                    responseElement.className = 'response';
+                    responseElement.dataset.clientId = dados.cliente_id;
+                    
+                    responseElement.innerHTML = `
+                        <div class="response-header">
+                            <span>Cliente ID: ${dados.cliente_id}</span>
+                            <span>${timestamp}</span>
+                        </div>
+                        <div class="response-content">
+Status: ${dados.status}
+Mensagem: ${dados.mensagem}
+${dados.detalhes_rota ? `
+Rota Calculada:
+${dados.detalhes_rota.map((parada, index) => `
+${index + 1}. ${parada.tipo === 'posto' ? 'Posto' : 'Destino'}: ${parada.nome || 'Final'}
+   Coordenadas: (${parada.x}, ${parada.y})
+   ${parada.tipo === 'posto' ? `Bateria na chegada: ${parada.bateria_chegada}%` : `Bateria restante: ${parada.bateria_restante.toFixed(2)}%`}
+   Horário de chegada: ${parada.horario_chegada}
+`).join('')}
+` : ''}
+Timestamp: ${new Date(dados.timestamp).toLocaleString()}
+                        </div>
+                    `;
+                    
+                    container.insertBefore(responseElement, container.children[1]);
+                    
+                    setTimeout(() => {
+                        responseElement.classList.add('animate');
+                    }, 100);
+                } else if (topic === 'Solicitar/Reserva') {
+                    const container = messageContainer;
+                    const messageElement = document.createElement('div');
+                    messageElement.className = 'message';
+                    messageElement.dataset.clientId = dados.cliente_id;
+                    
+                    messageElement.innerHTML = `
+                        <div class="message-header">
+                            <span>Cliente ID: ${dados.cliente_id}</span>
+                            <span>${timestamp}</span>
+                        </div>
+                        <div class="message-content">
+Cliente ID: ${dados.cliente_id}
+Origem: (${dados.origem.x}, ${dados.origem.y})
+Destino: (${dados.destino.x}, ${dados.destino.y})
+Bateria Atual: ${dados.bateria_atual}%
+Timestamp: ${new Date(dados.timestamp).toLocaleString()}
+                        </div>
+                    `;
+                    
+                    // Adiciona evento de clique
+                    messageElement.addEventListener('click', () => {
+                        showResponseModal(dados.cliente_id);
+                    });
+                    
+                    container.insertBefore(messageElement, container.children[1]);
+                    
+                    setTimeout(() => {
+                        messageElement.classList.add('animate');
+                    }, 100);
+                }
+            } catch (e) {
+                console.error('Erro ao processar mensagem:', e);
+                console.error('Mensagem que causou o erro:', message.toString());
+            }
+        });
+
+        client.on('error', (err) => {
+            console.error('Erro na conexão:', err);
+            statusIndicator.className = 'status-indicator status-offline';
+        });
+
+        client.on('close', () => {
+            console.log('Conexão fechada');
+            statusIndicator.className = 'status-indicator status-offline';
+        });
+
+        function clearMessages() {
+            messageContainer.innerHTML = '<h3>Solicitações de Reserva</h3>';
+            responseContainer.innerHTML = '<h3>Respostas de Reserva</h3>';
+            messageCount = 0;
+            messageCountElement.textContent = '0';
+            lastActivityElement.textContent = '-';
+        }
+
+        // Função para mostrar o modal com a resposta
+        function showResponseModal(clientId) {
+            const resposta = respostasArmazenadas[clientId];
+            if (!resposta) {
+                alert('Resposta ainda não disponível para este cliente.');
+                return;
+            }
+
+            const modal = document.getElementById('responseModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            let html = `
+                <div class="rota-item">
+                    <div class="rota-header">
+                        <span>Status: ${resposta.status}</span>
+                        <span>${resposta.mensagem}</span>
+                    </div>
+                </div>
+            `;
+
+            if (resposta.detalhes_rota) {
+                resposta.detalhes_rota.forEach((parada, index) => {
+                    html += `
+                        <div class="rota-item">
+                            <div class="rota-header">
+                                <span>${index + 1}. ${parada.tipo === 'posto' ? 'Posto' : 'Destino'}: ${parada.nome || 'Final'}</span>
+                            </div>
+                            <div class="rota-details">
+                                <p><strong>Coordenadas:</strong> (${parada.x}, ${parada.y})</p>
+                                <p><strong>${parada.tipo === 'posto' ? 'Bateria na chegada' : 'Bateria restante'}:</strong> 
+                                    ${parada.tipo === 'posto' ? parada.bateria_chegada + '%' : parada.bateria_restante.toFixed(2) + '%'}</p>
+                                <p><strong>Horário de chegada:</strong> ${parada.horario_chegada}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            modalContent.innerHTML = html;
+            modal.classList.add('active');
+        }
+
+        // Função para fechar o modal
+        function closeModal() {
+            const modal = document.getElementById('responseModal');
+            modal.classList.remove('active');
+        }
+
+        // Fechar modal ao clicar fora dele
+        document.getElementById('responseModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                closeModal();
+            }
+        });
+
+        // Fechar modal com a tecla ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html> 
