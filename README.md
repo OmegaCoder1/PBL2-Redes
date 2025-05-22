@@ -92,11 +92,40 @@ git clone https://github.com/OmegaCoder1/PBL2-Redes.git
 cd PBL2-Redes
 </pre>
 
-<p>Passo 1 da execução:</p>
+<p><strong>Passo 1 da execução:</strong></p>
 
 <pre>
-Descrição do passo 1.
+Rode o comando:
+docker-compose run -it teste_multiplos_clientes_diferentes
+
+Com isso todos os containers necessários serão gerados automaticamente.
+Após isso, abra os arquivos HTML localizados na pasta "interface".
+
+Após abrir os HTMLs, volte ao terminal e digite a quantidade de usuários que deseja simular fazendo solicitações de reserva de postos.
+
+⚠️ Se preferir testar unitariamente, basta abrir o arquivo "simulador_reserva.html".
 </pre>
+
+<p><strong>Testes disponíveis:</strong></p>
+
+<ul>
+  <li>
+    <strong>Teste 1 – Concorrência com mesma origem e destino:</strong><br>
+    Execute: <code>teste_multiplos_clientes_concorrentes_MESMA_ORIGEM_E_DESTINO_FINAL copy.py</code><br>
+    Esse teste simula vários usuários tentando reservar os mesmos postos no mesmo horário. Apenas um usuário deverá conseguir a reserva (caso exista rota possível), e os demais receberão erro informando que já existe uma reserva para aquele posto e horário.
+  </li><br>
+  <li>
+    <strong>Teste 2 – Concorrência com origens e destinos diferentes (stress test):</strong><br>
+    Execute: <code>teste_multiplos_clientes_concorrentes_ORIGENS_EFINAL_DIFERENTES.py</code><br>
+    Você pode definir a quantidade de usuários, e cada um fará requisições com origem e destino aleatórios para testar a robustez do sistema.
+  </li><br>
+  <li>
+    <strong>Teste 3 – Teste de lock de escrita e leitura:</strong><br>
+    Execute: <code>testes/teste_lock_geral_f.py</code><br>
+    Esse teste verifica o mecanismo de travamento (lock) de escrita/leitura. Enquanto um processo estiver alterando um posto (escrita), nenhuma outra requisição poderá ser processada. Quando não houver escrita ativa, múltiplas leituras poderão ocorrer simultaneamente.
+  </li>
+</ul>
+
 
 <h2>📈 Fluxo do Sistema</h2>
 
