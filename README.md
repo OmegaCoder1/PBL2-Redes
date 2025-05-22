@@ -19,8 +19,30 @@
 <h2>📝 Contexto do Problema</h2>
 
 <p>
-  Escreva o contexto aqui.
+🚗⚡ No projeto anterior, desenvolvemos um sistema inteligente de carregamento para veículos elétricos, focado em pontos de recarga urbanos.
+
+🌍 Agora, o desafio é outro: viabilizar viagens de longa distância (entre cidades e estados) com paradas planejadas e seguras para recarga. Usuários enfrentam dificuldades em garantir que haverá carregadores disponíveis ao longo de toda a rota.
+
+🎯 O objetivo é permitir que o cliente possa:
+<ul>
+  <li>🔍 Consultar a disponibilidade de vários pontos de recarga em sequência</li>
+  <li>📆 Realizar reservas antecipadas com horários definidos</li>
+  <li>⚙️ Enviar uma única requisição atômica para garantir todas as reservas de uma vez</li>
+</ul>
+
+🧠 Para isso, a comunicação entre servidores de diferentes empresas conveniadas deve ser padronizada, utilizando uma API REST desenvolvida pela equipe.
+
+📦 Exemplo prático:
+Um cliente quer viajar de <strong>João Pessoa</strong> até <strong>Feira de Santana</strong>. Ele inicia a requisição pelo servidor da empresa A e:
+<ul>
+  <li>Reserva um ponto entre João Pessoa e Maceió (empresa A)</li>
+  <li>Outro entre Maceió e Sergipe (empresa B)</li>
+  <li>Outro entre Sergipe e Feira de Santana (empresa C)</li>
+</ul>
+
+🔐 A reserva é sequencial e priorizada: o cliente que inicia o processo deve manter sua prioridade nos pontos seguintes. Isso garante uma viagem sem interrupções por falta de energia, evitando atrasos e falhas no trajeto.
 </p>
+
 
 <h3>Principais Problemas Identificados:</h3>
 
@@ -33,9 +55,19 @@
 <h2>🎯 Objetivos da Solução</h2>
 
 <ul>
-  <li>Escreva o objetivo aqui.</li>
+  <li>✅ Desenvolver um sistema de reserva antecipada de múltiplos pontos de recarga para veículos elétricos em rotas intermunicipais e interestaduais</li>
   
+  <li>🔄 Garantir que todas as reservas sejam feitas de forma atômica — ou todas são confirmadas ou nenhuma é mantida — evitando paradas inesperadas</li>
+  
+  <li>🌐 Padronizar a comunicação entre servidores de diferentes empresas por meio de MQTT e  API REST </li>
+  
+  <li>🧠 Permitir que o sistema calcule a rota ideal do cliente, identifique os pontos necessários e realize as reservas automaticamente</li>
+  
+  <li>🔒 Implementar mecanismos de concorrência e controle de acesso (locks) para evitar conflitos e garantir integridade nas reservas simultâneas</li>
+  
+  <li>📊 Realizar testes automatizados e de stress para validar a consistência do sistema sob diferentes cenários de uso</li>
 </ul>
+
 
 <hr/>
 
