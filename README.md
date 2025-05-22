@@ -129,11 +129,31 @@ Após abrir os HTMLs, volte ao terminal e digite a quantidade de usuários que d
 
 <h2>📈 Fluxo do Sistema</h2>
 
-<p>Fluxo geral do funcionamento do sistema:</p>
+<p>Entenda abaixo o funcionamento geral do sistema de reserva:</p>
 
 <pre>
-Exemplo de fluxo -> Exemplo de fluxo
+1️⃣ O cliente solicita a reserva de uma lista de postos através de um dos servidores MQTT.
+
+2️⃣ O servidor MQTT entra em contato com os dois servidores de posto via API REST
+    🔁 para obter um dicionário com todos os postos disponíveis no sistema.
+
+3️⃣ Com base nos dados recebidos, o servidor:
+    🧭 Calcula a rota que o usuário irá percorrer
+    📌 Identifica os postos que precisarão ser reservados
+
+4️⃣ O servidor inicia o processo de reserva:
+    🔐 Envia requisições de reserva para cada posto da rota via API REST
+
+5️⃣ A cada reserva bem-sucedida:
+    ✅ O posto reservado é salvo em um dicionário de confirmações
+
+6️⃣ Se ocorrer qualquer erro durante o processo de reserva:
+    ⚠️ O sistema desfaz todas as reservas anteriores
+    🔁 Enviando requisições de cancelamento via API REST para os postos já reservados
+
+📦 Resultado: O sistema garante que o usuário só terá uma reserva válida se todos os postos da rota forem reservados com sucesso. Caso contrário, nenhuma reserva é mantida.
 </pre>
+
 
 <hr/>
 
